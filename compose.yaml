@@ -1,0 +1,15 @@
+# Local Postgres for the portal's own tables. Production points DATABASE_URL elsewhere.
+services:
+  db:
+    image: postgres:16
+    container_name: ed-eadepro-db
+    restart: unless-stopped # comes back after Docker or the PC restarts
+    environment:
+      POSTGRES_PASSWORD: eadepro
+      POSTGRES_DB: eadepro_portal
+    ports:
+      - "23021:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

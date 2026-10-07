@@ -1,0 +1,35 @@
+A **recurring invoice** is an invoice that repeats on a schedule. Each time it is due, the portal creates it in NAV as a **draft** (never posted), assigned to the person who set it up.
+
+## Create one
+
+1. Click **New recurring invoice**.
+2. **General:** pick the **Company**, **Invoice type** (Sales or Purchase) and the **Customer** or **Vendor**. *Your Reference* is optional and is copied onto every invoice.
+3. **Schedule:** pick the **Frequency** and, for weekly or monthly, the day. Set **Starts on**, and **Ends on** if it should stop.
+4. **Lines:** add lines the same way as on a NAV invoice: Type, No., quantity, price, dimensions. A *Text line* is a description only.
+5. Click **Create**. If something is missing, the bottom of the panel says exactly what.
+
+The lists (customers, G/L accounts, dimensions…) come **live from NAV**, so the first load for a company can take a few seconds.
+
+## Buttons on each row
+
+| Button | What it does |
+|---|---|
+| 👁 **View** | Shows everything, including the lines and total |
+| ✏️ **Edit** | Change it; the next date is worked out again |
+| ⚡ **Run now** | Creates **today's** draft in NAV straight away |
+| ⏸ / ▶ **Pause / Resume** | Stops it for a while without deleting it |
+| 🗑 **Delete** | Removes it and its run history. Drafts already in NAV stay in NAV |
+
+## Run now
+
+- Creates today's draft immediately and tells you the NAV number, e.g. *Draft EPPTI2600131 created in NAV*.
+- If today's draft already exists, **nothing new is created**.
+- If today is a scheduled day, it **counts as that run**, so the scheduler will not make another.
+
+## Duplicates
+
+If you save one that looks the same as an existing one (same company, customer/vendor, schedule and lines), the portal asks first. Choose **Save anyway** only if it really is a second, separate invoice: both will create a draft each time.
+
+## Searching and filtering
+
+Type in the search box, filter by **company** or **status** (you can pick several), and click a column heading to sort.

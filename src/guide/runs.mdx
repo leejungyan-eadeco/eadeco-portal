@@ -1,0 +1,24 @@
+**Run history** lists every attempt to create a draft in NAV, newest first: by the daily scheduler and by **Run now**.
+
+## Reading a row
+
+| Column | Meaning |
+|---|---|
+| **When** | When it ran, and who started it (*Scheduler* or *Run now by …*) |
+| **Customer / vendor** | Which recurring invoice, and the date the draft is for |
+| **Result** | **Created**: the draft is in NAV. **Failed**: NAV did not accept it |
+| **Details** | The NAV draft number, or what went wrong |
+
+Click 👁 **View** to read the whole message.
+
+## When a run failed
+
+The scheduler tries the **same date again on its next run**, so a short NAV outage fixes itself. If it keeps failing, the message usually says why:
+
+| Message mentions | What to do |
+|---|---|
+| *sign-in* / *logon attempt failed* | The portal's NAV account was refused. Tell IT |
+| *not an option*, *does not exist*, a G/L account or dimension | Something on the recurring invoice no longer exists in NAV. Edit the recurring invoice |
+| *User Setup* (as a note, not an error) | The draft **was** created, just not assigned to that person in NAV |
+
+Once a later run creates the draft, the old failure disappears from **Needs attention** on the Overview.

@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Guide tours (driver.js), in the portal's colours and font. */
+.driver-popover.portal-tour {
+  background: var(--color-surface);
+  color: var(--color-ink-2);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  max-width: 340px;
+  box-shadow: 0 16px 40px rgb(28 25 23 / 0.18);
+}
+.portal-tour .driver-popover-title { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--color-ink); }
+.portal-tour .driver-popover-description { font-size: 14px; line-height: 1.5; color: var(--color-ink-2); }
+.portal-tour .driver-popover-progress-text { font-size: 12px; color: var(--color-ink-3); }
+.portal-tour .driver-popover-arrow { border-color: var(--color-surface); }
+.portal-tour .driver-popover-footer { gap: 6px; flex-wrap: wrap; }
+.portal-tour .driver-popover-footer button {
+  text-shadow: none; font: 500 13px/1 var(--font-sans); border-radius: 8px; padding: 7px 12px;
+  background: var(--color-surface); color: var(--color-ink); border: 1px solid var(--color-line-strong);
+}
+.portal-tour .driver-popover-footer button.driver-popover-next-btn { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
+.portal-tour .driver-popover-footer button.portal-tour-more { border: none; background: none; color: var(--color-accent-ink); padding-left: 0; text-decoration: underline; }
+.portal-tour .driver-popover-close-btn { color: var(--color-ink-3); }
+
+/* Semantic colour tokens. Warm ivory / beige neutrals (Claude-style, chosen to suit the gold logo) + one gold accent.
+   Shape rule: controls rounded-lg (8px), panels rounded-xl (12px), badges rounded-full. */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-playfair), Georgia, serif;
+
+  --color-canvas: #ffffff;
+  --color-sidebar: #f5f4ef;
+  --color-surface: #ffffff;
+  --color-subtle: #f6f4ee;
+  --color-line: #e6e2d8;
+  --color-line-strong: #d4cec0;
+  --color-ink: #1f1c14;
+  --color-ink-2: #5c574a;
+  --color-ink-3: #6b6554;
+
+  --color-accent: #8a6514; /* buttons: white text 5.3:1 */
+  --color-accent-hover: #765611;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #fbf4df;
+  --color-accent-ink: #7a5a12;
+  --color-brand: #6a5600; /* eadepro.com heading gold */
+
+  --color-good: #067647;
+  --color-good-soft: #ecfdf3;
+  --color-warn: #b54708;
+  --color-warn-soft: #fffaeb;
+  --color-bad: #b42318;
+  --color-bad-soft: #fef3f2;
+  --color-info: #4a4538;
+  --color-info-soft: #f0eee6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #262624;
+    --color-sidebar: #1f1e1d;
+    --color-surface: #30302e;
+    --color-subtle: #2b2a28;
+    --color-line: #3a3936;
+    --color-line-strong: #4a4845;
+    --color-ink: #f5f4ee;
+    --color-ink-2: #c2c0b6;
+    --color-ink-3: #a09d93;
+
+    --color-accent: #d1a92f;
+    --color-accent-hover: #ddb94a;
+    --color-on-accent: #1c1917;
+    --color-accent-soft: #2c2615;
+    --color-accent-ink: #e2c25f;
+    --color-brand: #d4b85a;
+
+    --color-good: #47cd89;
+    --color-good-soft: #0d2a1c;
+    --color-warn: #fdb022;
+    --color-warn-soft: #2e2208;
+    --color-bad: #f97066;
+    --color-bad-soft: #2f1412;
+    --color-info: #d6d3c9;
+    --color-info-soft: #3a3936;
+  }
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+@keyframes sheet-in {
+  from { transform: translateX(24px); opacity: 0; }
+}
+@keyframes pop-in {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open].sheet { animation: sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+  dialog[open].modal { animation: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+}
