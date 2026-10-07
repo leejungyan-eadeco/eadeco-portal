@@ -1,9 +1,10 @@
-// Signed login token kept in an httpOnly cookie. Valid for 1 day; no server-side session table.
-// ponytail: stateless token, so a disabled AD account keeps access until its token expires (max 24h).
-// Add a sessions table if instant sign-out of others is ever needed.
+// Signed login token kept in an httpOnly cookie, created after Keycloak signs someone in. No server-side session table.
+// ponytail: stateless token, so access removed in Keycloak (or a disabled AD account) only stops at the next sign-in,
+// at most SESSION_HOURS later. Add a sessions table if instant sign-out of others is ever needed.
 
 export const SESSION_COOKIE = "eadepro_session";
-export const SESSION_HOURS = 24;
+// A working day. Signing in again is usually silent while the Keycloak session is still alive.
+export const SESSION_HOURS = 8;
 
 export type SessionUser = { username: string; name: string };
 

@@ -1,6 +1,6 @@
-// The portal's own user list: AD checks the password, this list decides who gets in and with which role.
+// The portal's copy of who may sign in. Keycloak decides access and role; each sign-in writes them here, and every
+// request checks this list.
 import { db } from "./db";
-import type { AdUser } from "./ad";
 
 export type Role = "admin" | "user";
 export type PortalUser = {
@@ -18,27 +18,21 @@ export type PortalUser = {
 export const toUsername = (input: string) => input.trim().replace(/^.*\\/, "").replace(/@.*$/, "").toLowerCase();
 export const isUsername = (u: string) => /^[a-z0-9._-]{1,64}$/.test(u);
 
-export const bootstrapAdmins = () => (process.env.BOOTSTRAP_ADMINS ?? "").split(",").map(toUsername).filter(Boolean);
-
-// Called after AD accepted the password. Returns the role, or null when the person is not on the list.
-export async function admit(u: AdUser): Promise<Role | null> {
-  if (bootstrapAdmins().includes(u.username)) {
-    // Break-glass: .env admins are always active admins.
-    await db.query(
-      `insert into users (username, role, active, invited_by) values ($1, 'admin', true, '.env')
-       on conflict (username) do update set role = 'admin', active = true`,
-      [u.username],
-    );
+// Called after Keycloak signed someone in. Name, email and role come from Keycloak; role null means Keycloak no
+// longer gives them the portal, so they are marked inactive (an existing session in another tab stops too).
+export async function recordSignIn(u: { username: string; name: string; email: string; role: Role | null }) {
+  if (!u.role) {
+    await db.query(`update users set active = false where username = $1`, [u.username]);
+    return;
   }
-  const { rows } = await db.query<{ role: Role }>(
-    // Name and email come from AD the first time only, so an admin's edits are kept.
-    `update users set display_name = coalesce(display_name, $2), email = coalesce(email, nullif($3, '')), last_login_at = now() where username = $1 and active returning role`,
-    [u.username, u.name, u.email],
+  await db.query(
+    `insert into users (username, display_name, email, role, active, invited_by, last_login_at) values ($1, $2, nullif($3, ''), $4, true, 'keycloak', now())
+     on conflict (username) do update set display_name = excluded.display_name, email = excluded.email, role = excluded.role, active = true, last_login_at = now()`,
+    [u.username, u.name, u.email, u.role],
   );
-  return rows[0]?.role ?? null;
 }
 
-// Checked on every request, so removing someone or changing their role takes effect immediately.
+// Checked on every request. Changes made in Keycloak arrive at the person's next sign-in (sessions last SESSION_HOURS).
 export async function access(username: string): Promise<{ role: Role; name: string } | null> {
   const { rows } = await db.query<{ role: Role; name: string }>(`select role, coalesce(display_name, username) as name from users where username = $1 and active`, [username]);
   return rows[0] ?? null;

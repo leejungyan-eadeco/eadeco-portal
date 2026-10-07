@@ -21,7 +21,7 @@ export function LoginForm({ next }: { next: string }) {
         <span className="text-sm font-medium">Username</span>
         {/* The domain is fixed, so it sits inside the box instead of being explained. Typing it anyway still works. */}
         <span className="flex overflow-hidden rounded-lg border border-line-strong bg-surface focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
-          <span className="flex items-center border-r border-line bg-subtle px-3 text-sm text-ink-2 select-none">EADECO\</span>
+          <span className="flex items-center border-r border-line bg-subtle px-3 text-sm text-ink-2 select-none">EADECO</span>
           <input
             name="username"
             className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none"
@@ -43,7 +43,6 @@ export function LoginForm({ next }: { next: string }) {
       <button type="submit" className={`${btn.primary} w-full py-2.5 disabled:opacity-60`} disabled={pending}>
         {pending ? "Signing in" : "Sign in"}
       </button>
-      <p className="text-center text-xs text-ink-3">You stay signed in for 1 day.</p>
     </form>
   );
 }

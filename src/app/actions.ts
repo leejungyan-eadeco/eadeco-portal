@@ -3,10 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { bootstrapAdmins, isUsername, toUsername, type Role } from "@/lib/users";
 import { clearNavCache, navCompanies, navLookups, navServiceDefs, testNavService, type NavServiceKey } from "@/lib/nav";
 import { DBOS } from "@dbos-inc/dbos-sdk";
-import { directoryUsers, type DirectoryUser } from "@/lib/directory";
 import { explain } from "@/lib/nav-errors";
 import { runInvoice } from "@/lib/runs";
 import { cronError, dbosCron, TIMEZONE } from "@/lib/cron";
@@ -440,80 +438,3 @@ export async function runJobNow(key: string): Promise<Result> {
   }
   return { ok: true, data: null };
 }
-
-// ---------- Users (admin) ----------
-
-// Active EADECO accounts, for the Invite dropdown.
-export async function getDirectoryUsers(): Promise<Result<DirectoryUser[]>> {
-  const user = await currentUser();
-  if (!user) return fail(EXPIRED);
-  if (user.role !== "admin") return fail(ADMIN_ONLY);
-  try {
-    return { ok: true, data: await directoryUsers() };
-  } catch (e) {
-    return fail(`Could not read the EADECO user list: ${msg(e)}`);
-  }
-}
-
-export async function inviteUser(input: string, role: Role): Promise<Result> {
-  const user = await currentUser();
-  if (!user) return fail(EXPIRED);
-  if (user.role !== "admin") return fail(ADMIN_ONLY);
-  const username = toUsername(input);
-  if (!isUsername(username)) return fail("Enter an AD username such as jenyee, or an email such as jenyee@eadeco.com.my.");
-  if (role !== "admin" && role !== "user") return fail("Pick a role.");
-  try {
-    const ad = await directoryUsers()
-      .then((list) => list.find((d) => d.username === username))
-      .catch(() => undefined);
-    await db.query(`insert into users (username, role, invited_by, display_name, email) values ($1, $2, $3, $4, nullif($5, ''))`, [
-      username,
-      role,
-      user.username,
-      ad?.name ?? null,
-      ad?.email ?? "",
-    ]);
-  } catch (e) {
-    if ((e as { code?: string }).code === "23505") return fail(`${username} is already on the list.`);
-    return fail(msg(e));
-  }
-  revalidatePath("/settings/users");
-  return { ok: true, data: null };
-}
-
-// Anyone's name and email can be edited. Role and access cannot be changed for yourself or the .env admins,
-// so there is always at least one admin left.
-export async function updateUser(username: string, change: { displayName?: string; email?: string; role?: Role; active?: boolean }): Promise<Result> {
-  const user = await currentUser();
-  if (!user) return fail(EXPIRED);
-  if (user.role !== "admin") return fail(ADMIN_ONLY);
-  const access = change.role !== undefined || change.active !== undefined;
-  if (access && username === user.username) return fail("You can't change your own role or access. Ask another admin.");
-  if (access && bootstrapAdmins().includes(username)) return fail("This admin is set in the server's .env (BOOTSTRAP_ADMINS); their role and access can't be changed here.");
-  if (change.role !== undefined && change.role !== "admin" && change.role !== "user") return fail("Pick a role.");
-  if (change.active !== undefined && typeof change.active !== "boolean") return fail("Invalid status.");
-  const name = change.displayName?.trim();
-  const email = change.email?.trim().toLowerCase();
-  if (name !== undefined && name.length > 100) return fail("Name is too long (100 characters at most).");
-  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return fail("Enter a valid email, such as jenyee@eadeco.com.my.");
-  await db.query(
-    `update users set role = coalesce($2, role), active = coalesce($3, active),
-       display_name = case when $4::boolean then nullif($5, '') else display_name end,
-       email = case when $6::boolean then nullif($7, '') else email end
-     where username = $1`,
-    [username, change.role ?? null, change.active ?? null, name !== undefined, name ?? "", email !== undefined, email ?? ""],
-  );
-  revalidatePath("/settings/users");
-  return { ok: true, data: null };
-}
-
-export async function removeUser(username: string): Promise<Result> {
-  const user = await currentUser();
-  if (!user) return fail(EXPIRED);
-  if (user.role !== "admin") return fail(ADMIN_ONLY);
-  if (username === user.username) return fail("You can't remove yourself. Ask another admin.");
-  await db.query(`delete from users where username = $1`, [username]);
-  revalidatePath("/settings/users");
-  return { ok: true, data: null };
-}
-
