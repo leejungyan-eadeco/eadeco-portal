@@ -4,11 +4,14 @@
 import { DBOS } from "@dbos-inc/dbos-sdk";
 import { dbosCron, TIMEZONE } from "./cron";
 import { db } from "./db";
+import { getSetup, missingParkingDates, runParkingReport } from "./parking";
 import { runInvoice } from "./runs";
 import { nextRun } from "./schedule";
 
-// The jobs the portal can run. Parking reports join this list when they are built.
-export const jobs = [{ key: "recurring-invoices", label: "Recurring invoice drafts", description: "Creates each due recurring invoice in NAV as a draft. Nothing is posted." }] as const;
+// The jobs the portal can run.
+export const jobs = [
+  { key: "recurring-invoices", label: "Recurring invoice drafts", description: "Creates each due recurring invoice in NAV as a draft. Nothing is posted." },
+] as const;
 export type JobKey = (typeof jobs)[number]["key"];
 export const isJobKey = (k: string): k is JobKey => jobs.some((j) => j.key === k);
 
@@ -95,6 +98,47 @@ async function recurringInvoices(scheduledFor: Date): Promise<void> {
   DBOS.logger.info(`Recurring invoices for ${today}: ${total.created} created, ${total.failed} failed, ${total.skipped} skipped (${due.length} due).`);
 }
 
+// ---------- Parking reports: one schedule per setup ----------
+// Users set each setup's schedule on the Parking reports page; all share one workflow, told which setup by the
+// schedule's context.
+
+export const parkingScheduleName = (setupId: number) => `parking:${setupId}`;
+
+// One run: yesterday's report, plus any make-up days before it that have no draft yet (never before the
+// setup's first report date). A failed day is simply tried again on the next run.
+async function parkingSetupRun(scheduledFor: Date, context: { setupId: number }): Promise<void> {
+  const yesterday = minusDays(myDate(scheduledFor), 1);
+  const s = await DBOS.runStep(() => getSetup(context.setupId), { name: "setup" });
+  if (!s || s.status !== "Active") return;
+  const from = [minusDays(yesterday, s.catchUpDays), s.startDate].sort()[1];
+  const dates = from > yesterday ? [] : await DBOS.runStep(() => missingParkingDates(s.id, from, yesterday), { name: "find-missing" });
+  const total = { created: 0, failed: 0 };
+  for (const date of dates) {
+    const r = await DBOS.runStep(() => runParkingReport(s.id, date, "Scheduler").then((o) => o.result, () => "Failed" as const), { name: `report-${date}` });
+    total[r === "Created" ? "created" : "failed"]++;
+  }
+  DBOS.logger.info(`Parking report "${s.name}" up to ${yesterday}: ${total.created} created, ${total.failed} failed (${dates.length} missing).`);
+}
+
+// The registered workflow is kept on globalThis: server actions run in another module copy than the startup hook,
+// and DBOS only knows the copy that was registered.
+const g = globalThis as unknown as { __dbosStarted?: boolean; __parkingWorkflow?: typeof parkingSetupRun };
+
+// Creates, changes, pauses or removes a setup's live schedule to match the database. Called after every save.
+export async function syncParkingSchedule(setupId: number) {
+  const s = await getSetup(setupId);
+  const name = parkingScheduleName(setupId);
+  if (!s) {
+    if (await DBOS.getSchedule(name)) await DBOS.deleteSchedule(name);
+    return;
+  }
+  if (!g.__parkingWorkflow) throw new Error("The scheduler is not running.");
+  await DBOS.applySchedules([
+    { scheduleName: name, workflowFn: g.__parkingWorkflow, schedule: dbosCron(s.schedule), context: { setupId }, cronTimezone: TIMEZONE, automaticBackfill: true },
+  ]);
+  await (s.status === "Active" ? DBOS.resumeSchedule(name) : DBOS.pauseSchedule(name));
+}
+
 const workflows: Record<JobKey, (scheduledFor: Date) => Promise<void>> = { "recurring-invoices": recurringInvoices };
 
 // ---------- Start-up ----------
@@ -102,12 +146,12 @@ const workflows: Record<JobKey, (scheduledFor: Date) => Promise<void>> = { "recu
 // Called once from instrumentation.ts when the server starts: one DBOS schedule per job, and any
 // schedule DBOS still has from an older version (e.g. a renamed job) is removed.
 export async function startScheduler() {
-  const g = globalThis as unknown as { __dbosStarted?: boolean };
   if (g.__dbosStarted) return;
   g.__dbosStarted = true;
 
   DBOS.setConfig({ name: "eadepro-portal", systemDatabaseUrl: process.env.DATABASE_URL });
   const registered = Object.fromEntries(jobs.map((j) => [j.key, DBOS.registerWorkflow(workflows[j.key], { name: `job-${j.key}` })]));
+  g.__parkingWorkflow = DBOS.registerWorkflow(parkingSetupRun, { name: "parking-setup" });
   await DBOS.launch();
 
   const settings = await jobSettings();
@@ -115,6 +159,8 @@ export async function startScheduler() {
     settings.map((s) => ({ scheduleName: scheduleName(s.key), workflowFn: registered[s.key], schedule: dbosCron(s.schedule), cronTimezone: TIMEZONE, automaticBackfill: true })),
   );
   for (const s of settings) await (s.enabled ? DBOS.resumeSchedule(scheduleName(s.key)) : DBOS.pauseSchedule(scheduleName(s.key)));
-  const wanted = new Set(settings.map((s) => scheduleName(s.key)));
+  const { rows: setups } = await db.query<{ id: number }>(`select id from parking_setups`);
+  for (const p of setups) await syncParkingSchedule(p.id);
+  const wanted = new Set([...settings.map((s) => scheduleName(s.key)), ...setups.map((p) => parkingScheduleName(p.id))]);
   for (const old of await DBOS.listSchedules()) if (!wanted.has(old.scheduleName)) await DBOS.deleteSchedule(old.scheduleName);
 }

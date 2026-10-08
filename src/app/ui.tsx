@@ -21,7 +21,7 @@ export const th = "px-4 py-2.5 text-left text-xs font-medium text-ink-3 whitespa
 export const td = "px-4 py-3 align-middle";
 export const num = "text-right tabular-nums whitespace-nowrap";
 
-export function PageHeader({ title, description, actions, guide }: { title: string; description: string; actions?: React.ReactNode; guide?: GuideKey }) {
+export function PageHeader({ title, description, actions, guide }: { title: string; description: React.ReactNode; actions?: React.ReactNode; guide?: GuideKey }) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="max-w-[65ch]">
@@ -98,6 +98,9 @@ const statusTone: Record<string, Tone> = {
   Admin: "gold",
   User: "info",
   Queued: "info",
+  Processing: "info",
+  "Not run": "neutral",
+  "Deleted in NAV": "neutral",
   Paused: "warn",
   Failed: "bad",
   "Will retry": "warn",

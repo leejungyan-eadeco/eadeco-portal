@@ -1,10 +1,9 @@
-// Signed login token kept in an httpOnly cookie, created after Keycloak signs someone in. No server-side session table.
-// ponytail: stateless token, so access removed in Keycloak (or a disabled AD account) only stops at the next sign-in,
-// at most SESSION_HOURS later. Add a sessions table if instant sign-out of others is ever needed.
+// Signed login token kept in an httpOnly cookie. Valid for 1 day; no server-side session table.
+// ponytail: stateless token, so a disabled AD account keeps access until its token expires (max 24h).
+// Add a sessions table if instant sign-out of others is ever needed.
 
 export const SESSION_COOKIE = "eadepro_session";
-// A working day. Signing in again is usually silent while the Keycloak session is still alive.
-export const SESSION_HOURS = 8;
+export const SESSION_HOURS = 24;
 
 export type SessionUser = { username: string; name: string };
 
@@ -22,8 +21,14 @@ export async function createToken(user: SessionUser): Promise<string> {
   return `${payload}.${sig}`;
 }
 
+// Development only: DEV_SKIP_LOGIN=<username> acts as that user without a password (e.g. off the office network,
+// where AD can't be reached). The user must still be active on the portal's user list. Ignored in production.
+const devUser = () => (process.env.NODE_ENV === "development" && process.env.DEV_SKIP_LOGIN?.trim().toLowerCase()) || null;
+
 // Returns the user for a valid, unexpired token; null for anything else.
 export async function readToken(token: string | undefined): Promise<SessionUser | null> {
+  const dev = devUser();
+  if (!token && dev) return { username: dev, name: dev };
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;

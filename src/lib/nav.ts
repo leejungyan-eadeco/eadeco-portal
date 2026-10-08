@@ -4,8 +4,9 @@ import { db } from "./db";
 import type { InvoiceType, Line, NavLookups, Option } from "./types";
 
 export const navServiceDefs = [
-  { key: "customers", label: "Customers", page: "Customer Card (21)", fallback: "CustomerCard" },
-  { key: "vendors", label: "Vendors", page: "Vendor Card (26)", fallback: "VendorCard" },
+  // Customers and vendors come from light custom pages: the card pages work out balances for every row (about 20x slower).
+  { key: "customers", label: "Customers", page: "Custom page", fallback: "ws_DRM_Customer" },
+  { key: "vendors", label: "Vendors", page: "Custom page", fallback: "ws_VMS_Vendor" },
   { key: "glAccounts", label: "G/L accounts", page: "Chart of Accounts (17)", fallback: "ChartOfAccounts" },
   { key: "items", label: "Items", page: "Item List (31)", fallback: "Items" },
   { key: "resources", label: "Resources", page: "Resource List (77)", fallback: "ResourceList" },
@@ -25,6 +26,8 @@ export const navServiceDefs = [
   { key: "purchaseInvoiceLines", label: "Purchase invoice lines", page: "Custom page", fallback: "ws_VMS_PurchInvPurchLines" },
   { key: "purchaseInvoiceStandard", label: "Purchase invoice: Assigned User ID", page: "Purchase Invoice (51)", fallback: "PurchaseInvoice" },
   { key: "purchaseLinesStandard", label: "Purchase invoice lines: discount, unit of measure", page: "Purch. Invoice Subform (55)", fallback: "PurchaseInvoicePurchLines" },
+  // Read only: tells a posted draft (never re-created) from a deleted one.
+  { key: "postedSalesInvoices", label: "Posted sales invoices", page: "Posted Sales Invoices (143)", fallback: "PostedSalesInvoicesList" },
 ] as const;
 export type NavServiceKey = (typeof navServiceDefs)[number]["key"];
 export type NavServices = Record<NavServiceKey, string>;
@@ -118,19 +121,19 @@ async function call(method: "GET" | "POST" | "PATCH" | "DELETE", pathOrUrl: stri
 const getJson = (pathOrUrl: string) => call("GET", pathOrUrl);
 
 const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
+type Row = Record<string, string | boolean>;
 
-// Reads every page of a list (NAV returns large lists in pages).
-async function list<T>(company: string, service: string, select: string, filter?: string): Promise<T[]> {
-  let next: string | undefined =
-    `${encodeURIComponent(service)}?company=${encodeURIComponent(company)}&$select=${encodeURIComponent(select)}` +
-    (filter ? `&$filter=${encodeURIComponent(filter)}` : "");
-  const out: T[] = [];
+// Reads every page of a list (NAV returns large lists in pages). Filtering happens here, not in NAV: NAV's own
+// $filter is what makes these pages slow (Chart of Accounts: 5 s with a filter, 0.14 s without, for ~460 rows).
+async function list<T = Row>(company: string, service: string, select: string, keep: (r: Row) => boolean = () => true): Promise<T[]> {
+  let next: string | undefined = `${encodeURIComponent(service)}?company=${encodeURIComponent(company)}&$select=${encodeURIComponent(select)}`;
+  const out: Row[] = [];
   while (next) {
     const page = await getJson(next);
     out.push(...page.value);
     next = page["@odata.nextLink"];
   }
-  return out;
+  return out.filter(keep) as T[];
 }
 
 // ---------- Public API ----------
@@ -146,16 +149,9 @@ export async function testNavService(service: string, company: string): Promise<
   return page.value.length ? "Published and readable" : "Published and readable (no records in this company)";
 }
 
-type Row = Record<string, string>;
 const opt = (no: string, name: string, uom?: string): Option => (uom ? { no, name, uom } : { no, name });
 
-async function dimension(company: string, s: NavServices, code: string): Promise<NavLookups["dim1"]> {
-  if (!code) return null;
-  const rows = await list<Row>(company, s.dimensionValues, "Code,Name", `Dimension_Code eq ${quote(code)} and Blocked eq false and Dimension_Value_Type eq 'Standard'`);
-  return { label: code, values: rows.map((r) => opt(r.Code, r.Name)) };
-}
-
-// NAV lists per company, kept for 10 minutes: the first load can take several seconds (card pages are slow).
+// NAV lists per company, kept for 10 minutes, so reopening a form doesn't ask NAV again.
 // ponytail: in-process memory cache; new NAV records show up within 10 minutes. Move to a shared cache if the portal runs on several servers.
 const TTL = 10 * 60_000;
 const g = globalThis as unknown as { navCache?: Map<string, { at: number; data: Promise<NavLookups> }> };
@@ -178,39 +174,54 @@ export function navLookups(company: string): Promise<NavLookups> {
 
 async function loadLookups(company: string): Promise<NavLookups> {
   const s = await navServices();
-  const [setup] = await list<Row>(company, s.glSetup, "Global_Dimension_1_Code,Global_Dimension_2_Code");
+  const [setup] = await list(company, s.glSetup, "Global_Dimension_1_Code,Global_Dimension_2_Code");
+  const str = (v: string | boolean | undefined) => String(v ?? "");
+  const notBlocked = (r: Row) => r.Blocked === false;
 
-  const [customers, vendors, gl, items, resources, fixedAssets, charges, locations, unitsOfMeasure, dim1, dim2] = await Promise.all([
-    list<Row>(company, s.customers, "No,Name", "Blocked ne 'Invoice' and Blocked ne 'All'"),
-    list<Row>(company, s.vendors, "No,Name", "Blocked ne 'All'"),
+  const [customers, vendors, gl, items, resources, fixedAssets, charges, locations, unitsOfMeasure, dimValues] = await Promise.all([
+    list(company, s.customers, "No,Name,Blocked", (r) => r.Blocked !== "Invoice" && r.Blocked !== "All"),
+    list(company, s.vendors, "No,Name,Blocked", (r) => r.Blocked !== "All"),
     // Only posting accounts that allow direct posting can go on an invoice line.
-    list<Row>(company, s.glAccounts, "No,Name", "Account_Type eq 'Posting' and Direct_Posting eq true and Blocked eq false"),
-    list<Row>(company, s.items, "No,Description,Base_Unit_of_Measure", "Blocked eq false"),
+    list(company, s.glAccounts, "No,Name,Account_Type,Direct_Posting,Blocked", (r) => r.Account_Type === "Posting" && r.Direct_Posting === true && notBlocked(r)),
+    list(company, s.items, "No,Description,Base_Unit_of_Measure,Blocked", notBlocked),
     // ponytail: Resource List and Fixed Asset Card don't expose Blocked; NAV still refuses blocked ones when the draft is created.
-    list<Row>(company, s.resources, "No,Name,Base_Unit_of_Measure"),
-    list<Row>(company, s.fixedAssets, "No,Description"),
-    list<Row>(company, s.itemCharges, "No,Description"),
-    list<Row>(company, s.locations, "Code,Name"),
-    list<Row>(company, s.unitsOfMeasure, "Code,Description"),
-    dimension(company, s, setup?.Global_Dimension_1_Code ?? ""),
-    dimension(company, s, setup?.Global_Dimension_2_Code ?? ""),
+    list(company, s.resources, "No,Name,Base_Unit_of_Measure"),
+    list(company, s.fixedAssets, "No,Description"),
+    list(company, s.itemCharges, "No,Description"),
+    list(company, s.locations, "Code,Name"),
+    list(company, s.unitsOfMeasure, "Code,Description"),
+    list(company, s.dimensionValues, "Dimension_Code,Code,Name,Blocked,Dimension_Value_Type", (r) => notBlocked(r) && r.Dimension_Value_Type === "Standard"),
   ]);
+  const dimension = (code: string): NavLookups["dim1"] =>
+    code ? { label: code, values: dimValues.filter((r) => r.Dimension_Code === code).map((r) => opt(str(r.Code), str(r.Name))) } : null;
 
   return {
-    customers: customers.map((r) => opt(r.No, r.Name)),
-    vendors: vendors.map((r) => opt(r.No, r.Name)),
+    customers: customers.map((r) => opt(str(r.No), str(r.Name))),
+    vendors: vendors.map((r) => opt(str(r.No), str(r.Name))),
     lines: {
-      "G/L Account": gl.map((r) => opt(r.No, r.Name)),
-      Item: items.map((r) => opt(r.No, r.Description, r.Base_Unit_of_Measure)),
-      Resource: resources.map((r) => opt(r.No, r.Name, r.Base_Unit_of_Measure)),
-      "Fixed Asset": fixedAssets.map((r) => opt(r.No, r.Description)),
-      "Charge (Item)": charges.map((r) => opt(r.No, r.Description)),
+      "G/L Account": gl.map((r) => opt(str(r.No), str(r.Name))),
+      Item: items.map((r) => opt(str(r.No), str(r.Description), str(r.Base_Unit_of_Measure))),
+      Resource: resources.map((r) => opt(str(r.No), str(r.Name), str(r.Base_Unit_of_Measure))),
+      "Fixed Asset": fixedAssets.map((r) => opt(str(r.No), str(r.Description))),
+      "Charge (Item)": charges.map((r) => opt(str(r.No), str(r.Description))),
     },
-    locations: locations.map((r) => opt(r.Code, r.Name)),
-    unitsOfMeasure: unitsOfMeasure.map((r) => opt(r.Code, r.Description)),
-    dim1,
-    dim2,
+    locations: locations.map((r) => opt(str(r.Code), str(r.Name))),
+    unitsOfMeasure: unitsOfMeasure.map((r) => opt(str(r.Code), str(r.Description))),
+    dim1: dimension(str(setup?.Global_Dimension_1_Code)),
+    dim2: dimension(str(setup?.Global_Dimension_2_Code)),
   };
+}
+
+// Proves the portal's NAV account can work in one company: reads every list the invoice form uses (fresh, not
+// cached) and checks the draft services answer there. Web services are published for the whole database, but
+// permissions and setup are per company, so this is what a new company needs. Nothing is written.
+export async function testCompanyAccess(company: string): Promise<string> {
+  const s = await navServices();
+  const l = await loadLookups(company);
+  cache.set(company, { at: Date.now(), data: Promise.resolve(l) });
+  for (const service of [s.salesInvoice, s.salesInvoiceLines, s.purchaseInvoice, s.purchaseInvoiceLines]) await testNavService(service, company);
+  const dims = [l.dim1, l.dim2].filter(Boolean).map((d) => `${d!.label} (${d!.values.length})`);
+  return `${l.customers.length} customers, ${l.vendors.length} vendors, ${l.lines["G/L Account"].length} G/L accounts${dims.length ? `, dimensions ${dims.join(" and ")}` : ", no dimensions set up"}. The draft services answer in this company.`;
 }
 
 // ---------- Drafts (write) ----------
@@ -226,6 +237,17 @@ export type DraftInput = {
 
 // Creates an unposted invoice in NAV and returns its No. Never posts.
 // If anything after the header is refused, the half-made draft is deleted so NAV is left as it was.
+// What became of a draft the portal created: still a draft, posted (the posted invoice keeps the draft's number as
+// Pre-Assigned No.), or gone (deleted in NAV).
+export async function navDraftState(company: string, draftNo: string): Promise<{ state: "draft" } | { state: "posted"; no: string } | { state: "gone" }> {
+  const s = await navServices();
+  const q = (service: string, filter: string, select: string) =>
+    getJson(`${encodeURIComponent(service)}?company=${encodeURIComponent(company)}&$filter=${encodeURIComponent(filter)}&$select=${select}`).then((p) => p.value as Row[]);
+  if ((await q(s.salesInvoice, `No eq ${quote(draftNo)}`, "No")).length) return { state: "draft" };
+  const [posted] = await q(s.postedSalesInvoices, `Pre_Assigned_No eq ${quote(draftNo)}`, "No");
+  return posted ? { state: "posted", no: String(posted.No) } : { state: "gone" };
+}
+
 export async function createNavDraft(company: string, d: DraftInput): Promise<string> {
   const s = await navServices();
   const sales = d.type === "Sales";

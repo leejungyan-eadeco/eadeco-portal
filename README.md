@@ -16,6 +16,7 @@ pnpm check                # schedule date logic self-check
 - **NAV 2018, read:** dropdown lists (customers, vendors, G/L accounts, dimensions…) read live from NAV web services. `src/lib/nav.ts`.
 - **NAV 2018, write:** drafts are created through NAV's custom invoice services (`ws_WS_SalesInvoice`, `ws_VMS_PurchInv`), never posted. NAV errors are sorted into fixed codes in `src/lib/nav-errors.ts`.
 - **Scheduler:** DBOS inside the portal (`src/lib/scheduler.ts`), configured in Settings > Scheduler.
+- **Parking report:** each day, Playwright signs in to the parking portal, exports the day's Excel file, and one sales invoice draft is created with a line per payment type group (`src/lib/parking.ts`, Settings > Parking report). Every row is kept in `parking_transactions`; the file and step screenshots go to `STORAGE_DIR` (screenshots kept 30 days). Needs Chromium once per machine: `pnpm exec playwright install chromium`. `pnpm.cmd test:e2e --headed` runs just the download in a visible browser.
 
 ## Database changes (migrations)
 
@@ -31,16 +32,13 @@ Next.js 16, React 19, Tailwind 4, Phosphor icons. Parking reports is disabled un
 
 ## Login and access
 
-1. Staff sign in through EADECO's central login, **Keycloak** (OpenID Connect; `src/lib/oidc.ts`, `src/app/auth/`).
-   Keycloak checks the Windows password against AD, so the portal never sees it. People already signed in to
-   another EADECO app go straight in.
-2. Keycloak also decides who gets in and their role, through the client `eadepro-portal` and its client roles:
-   **user** (recurring invoices, run history) or **admin** (also companies, NAV connection, scheduler). Keycloak
-   blocks people with neither.
-3. At each sign-in the portal copies name, email and role into its `users` table (Settings > Users is a read-only
-   view of it). A signed token in an httpOnly cookie keeps people signed in for a working day (8 hours).
-   `src/proxy.ts` checks the token *and* the table on every request; `/settings` is admin-only, and every server action
-   checks again. Changes made in Keycloak apply at the person's next sign-in.
+1. Staff sign in with their Windows (EADECO) account. AD checks the password over LDAPS (`AD_URLS`; the internal CA is
+   trusted through the Windows certificate store). Passwords are never stored.
+2. The portal's own user list (Settings > Users) then decides who gets in and their role:
+   **User** (recurring invoices, run history) or **Admin** (also companies, NAV connection, users).
+3. A signed token in an httpOnly cookie keeps people signed in for 1 day. `src/proxy.ts` checks the token *and* the
+   user list on every request, so removing someone or changing a role takes effect immediately; `/settings` is admin-only,
+   and every server action checks again.
 
-Settings: `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` (see `.env.example`). For a local Keycloak to test
-against, see `C:\Dev\work\keycloak-playground`. Set `COOKIE_SECURE=true` once the portal is served over HTTPS.
+`BOOTSTRAP_ADMINS` (comma-separated AD usernames) are always admins, so there is a way in on a fresh install.
+Set `COOKIE_SECURE=true` once the portal is served over HTTPS.

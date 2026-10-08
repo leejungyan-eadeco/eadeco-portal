@@ -102,3 +102,8 @@ body {
   dialog[open].sheet { animation: sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1); }
   dialog[open].modal { animation: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1); }
 }
+
+/* While a dialog is open only the dialog scrolls: the page behind it stays put. The gutter stays reserved so the
+   page doesn't shift sideways when its scrollbar is hidden. */
+html { scrollbar-gutter: stable; }
+html:has(dialog[open]) { overflow: hidden; }

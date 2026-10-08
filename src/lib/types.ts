@@ -62,6 +62,67 @@ export type Run = {
   triggeredBy: string | null;
 };
 
+// ---------- Parking report ----------
+
+// One NAV line: the total of every row whose payment type is in `values`.
+export type ParkingLine = { label: string; values: string[]; glAccount: string; description: string; dim1: string; dim2: string };
+// Each amount is found by its header text in the header row, so a moved column is still read right.
+export type ParkingColumns = { net: string; sst: string; type: string };
+// The day's SST from the report on its own line (finance's way), instead of leaving tax to NAV's VAT setup.
+export type ParkingSstLine = { glAccount: string; description: string; dim1: string; dim2: string };
+// Only rows whose value in `column` is one of `values` count (e.g. Status "pay succeed"); unpaid tickets are left out.
+export type ParkingCountOnly = { column: string; values: string[] };
+
+// One carpark / portal account. The password never leaves the server; hasPassword says whether one is saved.
+export type ParkingSetup = {
+  id: number;
+  name: string;
+  portalUrl: string;
+  username: string;
+  hasPassword: boolean;
+  companyCode: string | null;
+  customerNo: string;
+  startDate: string;
+  headerRow: number;
+  columns: ParkingColumns;
+  lines: ParkingLine[];
+  sstLine: ParkingSstLine | null;
+  countOnly: ParkingCountOnly | null;
+  status: "Active" | "Paused";
+  schedule: string;
+  catchUpDays: number;
+};
+export type ParkingSetupRow = ParkingSetup & { companyName: string | null; lastRunDate: string | null; lastResult: string | null; updatedBy: string | null; updatedAt: string };
+
+export type ParkingTotal = { label: string; count: number; net: number; sst: number };
+
+export type ParkingStep = { seq: number; at: string; step: string; detail: string; ok: boolean; file: string | null; sha256: string | null };
+
+export type ParkingRun = {
+  id: number;
+  setupId: number;
+  setupName: string;
+  companyName: string | null;
+  at: string;
+  reportDate: string;
+  result: "Running" | "Created" | "Failed" | "Deleted";
+  navDocument: string | null;
+  error: string | null;
+  errorCode: string | null;
+  note: string | null;
+  folder: string | null;
+  totals: ParkingTotal[] | null;
+  rowCount: number | null;
+  triggeredBy: string;
+  settings: Omit<ParkingSetup, "hasPassword"> | null;
+  steps: ParkingStep[];
+};
+
+// A day's report summed by payment type (RM), for picking columns and previewing the lines before saving.
+export type ParkingSample = { date: string; headers: string[]; types: { value: string; count: number; net: number; sst: number }[] };
+
+export type ParkingChange = { id: number; at: string; changedBy: string; action: string; changes: Record<string, { before: unknown; after: unknown }> };
+
 // Everything the invoice form needs from NAV for one company.
 export type NavLookups = {
   customers: Option[];

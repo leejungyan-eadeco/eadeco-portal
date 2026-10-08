@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Plus } from "@phosphor-icons/react";
+import { CheckCircle, CircleNotch, Plus, PlugsConnected, WarningCircle } from "@phosphor-icons/react";
 import type { Company } from "@/lib/types";
-import { deleteCompany, getNavCompanies, saveCompany, setCompanyActive } from "../../actions";
+import { deleteCompany, getNavCompanies, saveCompany, setCompanyActive, testCompanyNav } from "../../actions";
 import { columnHelper, DataTable, RowActions, type Columns } from "../../data-table";
 import { Confirm, Dialog, ErrorNote } from "../../dialog";
 import { SearchSelect } from "../../select";
@@ -81,7 +81,14 @@ const col = columnHelper<Company>();
 export function CompaniesView({ companies }: { companies: Company[] }) {
   const [editing, setEditing] = useState<Company | "new" | null>(null);
   const [deleting, setDeleting] = useState<Company | null>(null);
+  const [test, setTest] = useState<{ name: string; state: "running" | "ok" | "failed"; text: string } | null>(null);
   const [, start] = useTransition();
+
+  const runTest = async (c: Company) => {
+    setTest({ name: c.name, state: "running", text: "Reading its lists from NAV (can take up to a minute the first time)" });
+    const r = await testCompanyNav(c.code);
+    setTest({ name: c.name, state: r.ok ? "ok" : "failed", text: r.ok ? r.data : r.error });
+  };
 
   const columns = useMemo<Columns<Company>>(
     () => [
@@ -105,7 +112,13 @@ export function CompaniesView({ companies }: { companies: Company[] }) {
       col.display({
         id: "actions",
         header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row: { original: c } }) => <RowActions name={c.name} onEdit={() => setEditing(c)} onDelete={() => setDeleting(c)} />,
+        cell: ({ row: { original: c } }) => (
+          <RowActions name={c.name} onEdit={() => setEditing(c)} onDelete={() => setDeleting(c)}>
+            <button className={btn.icon} title="Test NAV access in this company" aria-label={`Test NAV access in ${c.name}`} onClick={() => runTest(c)}>
+              <PlugsConnected size={16} />
+            </button>
+          </RowActions>
+        ),
       }),
     ],
     [],
@@ -122,6 +135,18 @@ export function CompaniesView({ companies }: { companies: Company[] }) {
           </button>
         }
       />
+
+      {test && (
+        <p
+          role="status"
+          className={`mb-4 flex gap-2 rounded-lg px-3.5 py-3 text-sm ${test.state === "ok" ? "bg-good-soft text-good" : test.state === "failed" ? "bg-bad-soft text-bad" : "bg-subtle text-ink-2"}`}
+        >
+          {test.state === "running" ? <CircleNotch size={18} className="mt-px shrink-0 animate-spin" /> : test.state === "ok" ? <CheckCircle size={18} weight="fill" className="mt-px shrink-0" /> : <WarningCircle size={18} weight="fill" className="mt-px shrink-0" />}
+          <span>
+            <span className="font-medium">{test.name}:</span> {test.text}
+          </span>
+        </p>
+      )}
 
       <section className={panel}>
         <DataTable

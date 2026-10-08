@@ -536,7 +536,7 @@ export function InvoicesView({ companies, invoices }: { companies: Company[]; in
     <>
       <PageHeader
         guide="recurring-invoices"
-        title="Recurring invoices"
+        title="Recurring Invoices"
         description="Sales and purchase invoices created in NAV on a schedule, as drafts for review."
         actions={
           <button data-tour="new-invoice" className={`${btn.primary} disabled:pointer-events-none disabled:opacity-50`} disabled={noCompanies} onClick={() => setEditing("new")}>
@@ -611,7 +611,7 @@ export function InvoicesView({ companies, invoices }: { companies: Company[]; in
       {deleting && (
         <Confirm title="Delete recurring invoice?" onClose={() => setDeleting(null)} onConfirm={() => deleteInvoice(deleting.id)}>
           <p>
-            The schedule for <span className="font-medium text-ink">{deleting.partyName}</span> ({deleting.companyName}) and its run history are deleted. Drafts it already created in NAV stay in NAV.
+            The schedule for <span className="font-medium text-ink">{deleting.partyName}</span> ({deleting.companyName}) and its activity are deleted. Drafts it already created in NAV stay in NAV.
           </p>
           <p>To stop it for a while instead, pause it.</p>
         </Confirm>

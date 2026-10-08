@@ -4,8 +4,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   // Load from node_modules at runtime instead of bundling: node-expose-sspi is a native Windows module,
-  // and DBOS must be ONE instance shared by the startup hook (which launches it) and the server actions.
-  serverExternalPackages: ["node-expose-sspi", "@dbos-inc/dbos-sdk"],
+  // DBOS must be ONE instance shared by the startup hook (which launches it) and the server actions,
+  // and Playwright (parking report) drives a real browser binary.
+  // Run history was renamed Activity.
+  redirects: async () => [{ source: "/runs", destination: "/activity", permanent: true }],
+  serverExternalPackages: ["node-expose-sspi", "@dbos-inc/dbos-sdk", "playwright", "exceljs"],
 };
 
 // The in-page guides (src/guide/*.mdx) are Markdown files compiled into React components.

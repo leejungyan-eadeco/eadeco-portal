@@ -32,7 +32,7 @@ export function Dialog({
 
   const shape =
     variant === "sheet"
-      ? `sheet m-0 ml-auto h-dvh max-h-dvh w-full ${wide ? "max-w-[1120px]" : "max-w-[560px]"} border-l`
+      ? `sheet m-0 ml-auto h-dvh max-h-dvh w-full overflow-hidden ${wide ? "max-w-[1120px]" : "max-w-[560px]"} border-l`
       : "modal m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border";
 
   return (
@@ -49,7 +49,8 @@ export function Dialog({
             <X size={18} />
           </button>
         </div>
-        <div className={`px-6 py-5 ${variant === "sheet" ? "flex-1 overflow-y-auto" : ""}`}>{children}</div>
+        {/* The sheet's only scroll area; min-h-0 lets it shrink inside the full-height column instead of growing the dialog. */}
+        <div className={`px-6 py-5 ${variant === "sheet" ? "min-h-0 flex-1 overflow-y-auto" : ""}`}>{children}</div>
         {footer && <div className="flex gap-2 border-t border-line px-6 py-4">{footer}</div>}
       </div>
     </dialog>
