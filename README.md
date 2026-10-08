@@ -26,9 +26,22 @@ Migrations live in `src/db/migrations/`, oldest first. Each runs once, in its ow
 pnpm db:migrate
 ```
 
-To change the database, add a new file such as `002-add-invoice-notes.ts` exporting `sql`, and add it to the end of the list in `src/db/migrations/index.ts`. Never edit or reorder a migration that has already run; fix mistakes with a new one.
+To change the database, add a new file such as `011-add-invoice-notes.ts` exporting `sql`, and add it to the end of the list in `src/db/migrations/index.ts`. Never edit or reorder a migration that has already run; fix mistakes with a new one.
 
-Next.js 16, React 19, Tailwind 4, Phosphor icons. Parking reports is disabled until its approach is decided.
+Next.js 16, React 19, Tailwind 4, Phosphor icons.
+
+## Deploy with Docker
+
+The image is built on Playwright's own image, so Chromium for the parking report is included. On the server:
+
+1. Copy `.env.example` to `.env` and fill it in. In Docker, NAV signs in with `NAV_AUTH=windows` and the `NAV_DOMAIN` / `NAV_USERNAME` / `NAV_PASSWORD` account (NTLM). AD needs `AD_TLS_CA` (the CA certificate) and `AD_BIND_DN` / `AD_BIND_PASSWORD` for the user list. Generate `CREDENTIALS_KEY` and keep it backed up. Never set `DEV_SKIP_LOGIN` here.
+2. Start the database and the portal:
+
+```bash
+docker compose --profile portal up -d --build
+```
+
+The portal listens on port 23020. Migrations run on start. Report files and screenshots are in the `storage` volume, and the database in `pgdata`; back up both. The server must resolve `*.eadeco.local` (NAV, the domain controllers), as the host does.
 
 ## Login and access
 

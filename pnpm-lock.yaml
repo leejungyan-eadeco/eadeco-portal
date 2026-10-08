@@ -41,15 +41,15 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+      httpntlm:
+        specifier: ^1.8.13
+        version: 1.8.13
       ldapts:
         specifier: ^9.2.0
         version: 9.2.0
       next:
         specifier: 16.1.6
         version: 16.1.6(@playwright/test@1.63.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      node-expose-sspi:
-        specifier: ^0.1.60
-        version: 0.1.60
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -99,6 +99,10 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+    optionalDependencies:
+      node-expose-sspi:
+        specifier: ^0.1.60
+        version: 0.1.60
 
 packages:
 
@@ -1029,6 +1033,9 @@ packages:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
     engines: {node: '>=6'}
 
+  des.js@1.1.0:
+    resolution: {integrity: sha512-r17GxjhUCjSRy8aiJpr8/UadFIzMzJGexI3Nmz4ADi9LYSFx4gTBp80+NaX/YsXWWLhpZ7v/v/ubEc/bCNfKwg==}
+
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
@@ -1208,6 +1215,14 @@ packages:
     resolution: {integrity: sha512-Kpk9Sm7NmI+RHhnj6OIWDI1d6fIoFAtFt9RLaTMRlg/8w49juAStsrBgp0Dp4OdxdVbRIeKhtCUvoi/RuAhO4g==}
     engines: {node: '>= 0.6'}
 
+  httpntlm@1.8.13:
+    resolution: {integrity: sha512-2F2FDPiWT4rewPzNMg3uPhNkP3NExENlUGADRUDPQvuftuUTGW98nLZtGemCIW3G40VhWZYgkIDcQFAwZ3mf2Q==}
+    engines: {node: '>=10.4.0'}
+
+  httpreq@1.1.1:
+    resolution: {integrity: sha512-uhSZLPPD2VXXOSN8Cni3kIsoFHaU2pT/nySEU/fHr/ePbqHYr0jeiQRmUKLEirC09SFPsdMoA7LU7UXMd/w0Kw==}
+    engines: {node: '>= 6.15.1'}
+
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -1261,6 +1276,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  js-md4@0.3.2:
+    resolution: {integrity: sha512-/GDnfQYsltsjRswQhN9fhv3EMw2sCpUdrdxyWDOUK7eyD++r3gRhzgiQgc/x4MAv2i1iuQ4lxO5mvqM3vj4bwA==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -1598,6 +1616,9 @@ packages:
   mime-types@2.1.35:
     resolution: {integrity: sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==}
     engines: {node: '>= 0.6'}
+
+  minimalistic-assert@1.0.1:
+    resolution: {integrity: sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A==}
 
   minimatch@3.1.5:
     resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
@@ -1999,6 +2020,9 @@ packages:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  underscore@1.12.1:
+    resolution: {integrity: sha512-hEQt0+ZLDVUMhebKxL4x1BTtDY7bavVofhZ9KZ4aI26X9SRaE+Y3m83XUL1UP2jn8ynjndwCCpEHdUG+9pP1Tw==}
 
   undici-types@7.24.6:
     resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
@@ -2444,6 +2468,7 @@ snapshots:
     dependencies:
       chevrotain: 7.1.2
       commander: 6.2.1
+    optional: true
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -2674,6 +2699,7 @@ snapshots:
     dependencies:
       '@types/node': 24.19.0
       form-data: 4.0.6
+    optional: true
 
   '@types/node@14.18.63': {}
 
@@ -2753,7 +2779,8 @@ snapshots:
 
   async@3.2.6: {}
 
-  asynckit@0.4.0: {}
+  asynckit@0.4.0:
+    optional: true
 
   babel-plugin-macros@3.1.0:
     dependencies:
@@ -2808,6 +2835,7 @@ snapshots:
     dependencies:
       es-errors: 1.3.0
       function-bind: 1.1.2
+    optional: true
 
   callsites@3.1.0: {}
 
@@ -2830,6 +2858,7 @@ snapshots:
   chevrotain@7.1.2:
     dependencies:
       regexp-to-ast: 0.5.0
+    optional: true
 
   client-only@0.0.1: {}
 
@@ -2838,12 +2867,14 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
+    optional: true
 
   comma-separated-tokens@2.0.3: {}
 
   commander@12.1.0: {}
 
-  commander@6.2.1: {}
+  commander@6.2.1:
+    optional: true
 
   compress-commons@4.1.2:
     dependencies:
@@ -2887,7 +2918,8 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  data-uri-to-buffer@3.0.1: {}
+  data-uri-to-buffer@3.0.1:
+    optional: true
 
   dayjs@1.11.23: {}
 
@@ -2899,11 +2931,18 @@ snapshots:
     dependencies:
       character-entities: 2.0.2
 
-  delayed-stream@1.0.0: {}
+  delayed-stream@1.0.0:
+    optional: true
 
-  depd@1.1.2: {}
+  depd@1.1.2:
+    optional: true
 
   dequal@2.0.3: {}
+
+  des.js@1.1.0:
+    dependencies:
+      inherits: 2.0.4
+      minimalistic-assert: 1.0.1
 
   detect-libc@2.1.2: {}
 
@@ -2923,6 +2962,7 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
+    optional: true
 
   duplexer2@0.1.4:
     dependencies:
@@ -2941,13 +2981,15 @@ snapshots:
     dependencies:
       is-arrayish: 0.2.1
 
-  es-define-property@1.0.1: {}
+  es-define-property@1.0.1:
+    optional: true
 
   es-errors@1.3.0: {}
 
   es-object-atoms@1.1.2:
     dependencies:
       es-errors: 1.3.0
+    optional: true
 
   es-set-tostringtag@2.1.0:
     dependencies:
@@ -2955,6 +2997,7 @@ snapshots:
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
       hasown: 2.0.4
+    optional: true
 
   esast-util-from-estree@2.0.0:
     dependencies:
@@ -3055,7 +3098,8 @@ snapshots:
       '@fast-csv/format': 4.3.5
       '@fast-csv/parse': 4.3.6
 
-  fetch-blob@2.1.2: {}
+  fetch-blob@2.1.2:
+    optional: true
 
   find-root@1.1.0: {}
 
@@ -3066,6 +3110,7 @@ snapshots:
       es-set-tostringtag: 2.1.0
       hasown: 2.0.4
       mime-types: 2.1.35
+    optional: true
 
   fs-constants@1.0.0: {}
 
@@ -3095,11 +3140,13 @@ snapshots:
       has-symbols: 1.1.0
       hasown: 2.0.4
       math-intrinsics: 1.1.0
+    optional: true
 
   get-proto@1.0.1:
     dependencies:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
+    optional: true
 
   glob@7.2.3:
     dependencies:
@@ -3110,15 +3157,18 @@ snapshots:
       once: 1.4.0
       path-is-absolute: 1.0.1
 
-  gopd@1.2.0: {}
+  gopd@1.2.0:
+    optional: true
 
   graceful-fs@4.2.11: {}
 
-  has-symbols@1.1.0: {}
+  has-symbols@1.1.0:
+    optional: true
 
   has-tostringtag@1.0.2:
     dependencies:
       has-symbols: 1.1.0
+    optional: true
 
   hasown@2.0.4:
     dependencies:
@@ -3180,6 +3230,16 @@ snapshots:
       setprototypeof: 1.2.0
       statuses: 1.5.0
       toidentifier: 1.0.1
+    optional: true
+
+  httpntlm@1.8.13:
+    dependencies:
+      des.js: 1.1.0
+      httpreq: 1.1.1
+      js-md4: 0.3.2
+      underscore: 1.12.1
+
+  httpreq@1.1.1: {}
 
   ieee754@1.2.1: {}
 
@@ -3223,6 +3283,8 @@ snapshots:
   isarray@1.0.0: {}
 
   jiti@2.7.0: {}
+
+  js-md4@0.3.2: {}
 
   js-tokens@4.0.0: {}
 
@@ -3344,7 +3406,8 @@ snapshots:
 
   markdown-table@3.0.4: {}
 
-  math-intrinsics@1.1.0: {}
+  math-intrinsics@1.1.0:
+    optional: true
 
   mdast-util-find-and-replace@3.0.3:
     dependencies:
@@ -3783,11 +3846,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  mime-db@1.52.0: {}
+  mime-db@1.52.0:
+    optional: true
 
   mime-types@2.1.35:
     dependencies:
       mime-db: 1.52.0
+    optional: true
+
+  minimalistic-assert@1.0.1: {}
 
   minimatch@3.1.5:
     dependencies:
@@ -3843,6 +3910,7 @@ snapshots:
     transitivePeerDependencies:
       - domexception
       - supports-color
+    optional: true
 
   node-fetch@3.0.0-beta.9:
     dependencies:
@@ -3850,6 +3918,7 @@ snapshots:
       fetch-blob: 2.1.2
     transitivePeerDependencies:
       - domexception
+    optional: true
 
   normalize-path@3.0.0: {}
 
@@ -3859,6 +3928,7 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   object-assign@4.1.1: {}
 
@@ -4059,7 +4129,8 @@ snapshots:
       unified: 11.0.5
       vfile: 6.0.3
 
-  regexp-to-ast@0.5.0: {}
+  regexp-to-ast@0.5.0:
+    optional: true
 
   rehype-recma@1.0.0:
     dependencies:
@@ -4142,7 +4213,8 @@ snapshots:
 
   setimmediate@1.0.5: {}
 
-  setprototypeof@1.2.0: {}
+  setprototypeof@1.2.0:
+    optional: true
 
   sharp@0.34.5:
     dependencies:
@@ -4186,7 +4258,8 @@ snapshots:
 
   split2@4.2.0: {}
 
-  statuses@1.5.0: {}
+  statuses@1.5.0:
+    optional: true
 
   strict-event-emitter-types@2.0.0: {}
 
@@ -4238,7 +4311,8 @@ snapshots:
 
   tmp@0.2.7: {}
 
-  toidentifier@1.0.1: {}
+  toidentifier@1.0.1:
+    optional: true
 
   traverse@0.3.9: {}
 
@@ -4257,6 +4331,8 @@ snapshots:
   type-fest@0.20.2: {}
 
   typescript@5.9.3: {}
+
+  underscore@1.12.1: {}
 
   undici-types@7.24.6: {}
 

@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // and Playwright (parking report) drives a real browser binary.
   // Run history was renamed Activity.
   redirects: async () => [{ source: "/runs", destination: "/activity", permanent: true }],
-  serverExternalPackages: ["node-expose-sspi", "@dbos-inc/dbos-sdk", "playwright", "exceljs"],
+  serverExternalPackages: ["node-expose-sspi", "httpntlm", "@dbos-inc/dbos-sdk", "playwright", "exceljs"],
 };
 
 // The in-page guides (src/guide/*.mdx) are Markdown files compiled into React components.

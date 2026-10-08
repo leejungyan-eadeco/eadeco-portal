@@ -1,5 +1,7 @@
 // NAV 2018 web services (OData V4).
-// Server address and sign-in come from .env; each service name is configurable in Settings > NAV connection.
+// The server address and each service name are configurable in Settings > NAV connection; the sign-in comes from .env.
+import http from "node:http";
+import https from "node:https";
 import { db } from "./db";
 import type { InvoiceType, Line, NavLookups, Option } from "./types";
 
@@ -58,65 +60,117 @@ export async function navServices(): Promise<NavServices> {
 }
 
 // ---------- Sign-in ----------
+// windows: NTLM with NAV_DOMAIN / NAV_USERNAME / NAV_PASSWORD, as e-invoice signs in. Works anywhere, Docker included.
+// current: Kerberos as the Windows account running the portal (SSPI). Windows only, no password stored.
+// navuser: a NAV user password (Basic), only if the NAV server uses NavUserPassword.
 
-// current / windows: Kerberos through Windows (SSPI), like a browser on the domain. navuser: NAV user password (Basic).
-async function authorization(host: string): Promise<string> {
-  const { auth } = navConnection();
-  if (auth === "navuser") return `Basic ${Buffer.from(`${process.env.NAV_USERNAME}:${process.env.NAV_PASSWORD}`).toString("base64")}`;
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
+type Reply = { status: number; text: string };
 
-  const { default: sspiPkg } = await import("node-expose-sspi");
-  const { sspi } = sspiPkg;
-  const authData = auth === "windows" ? { domain: process.env.NAV_DOMAIN ?? "", user: process.env.NAV_USERNAME ?? "", password: process.env.NAV_PASSWORD ?? "" } : undefined;
-  const { credential } = sspi.AcquireCredentialsHandle({ packageName: "Negotiate", ...(authData ? { authData } : {}) });
+// The part of node-expose-sspi used here, typed by hand so builds without it (Linux) still type-check.
+const SSPI = "node-expose-sspi";
+type Sspi = {
+  AcquireCredentialsHandle(o: { packageName: string }): { credential: unknown };
+  InitializeSecurityContext(o: { credential: unknown; targetName: string }): { contextHandle?: unknown; SecBufferDesc: { buffers: ArrayBuffer[] } };
+  DeleteSecurityContext(handle: unknown): void;
+  FreeCredentialsHandle(credential: unknown): void;
+};
+
+// One plain HTTP request on the given agent (NTLM must finish on the connection it started on).
+function request(method: Method, url: URL, headers: Record<string, string>, body: string | undefined, agent: http.Agent): Promise<Reply & { challenge: string }> {
+  return new Promise((resolve, reject) => {
+    const req = (url.protocol === "https:" ? https : http).request(
+      url,
+      { method, agent, headers: { ...headers, "Content-Length": String(Buffer.byteLength(body ?? "")) }, timeout: 120_000 }, // a cold NAV can take ~25s
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8"), challenge: String(res.headers["www-authenticate"] ?? "") }));
+      },
+    );
+    req.on("timeout", () => req.destroy(Object.assign(new Error("NAV did not answer in time"), { code: "ETIMEDOUT" })));
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+// NAV offers only "Negotiate"; NTLM messages are sent under that name, as Python's requests-ntlm does for e-invoice.
+async function sendNtlm(method: Method, url: URL, headers: Record<string, string>, body?: string): Promise<Reply> {
+  const { default: httpntlm } = await import("httpntlm");
+  const { ntlm } = httpntlm;
+  const account = { username: process.env.NAV_USERNAME ?? "", password: process.env.NAV_PASSWORD ?? "", domain: process.env.NAV_DOMAIN ?? "", workstation: "" };
+  const agent = new (url.protocol === "https:" ? https : http).Agent({ keepAlive: true, maxSockets: 1 });
   try {
-    const ctx = sspi.InitializeSecurityContext({ credential, targetName: `HTTP/${host}` });
-    if (ctx.contextHandle) sspi.DeleteSecurityContext(ctx.contextHandle);
-    return `Negotiate ${Buffer.from(ctx.SecBufferDesc.buffers[0]).toString("base64")}`;
-  } catch (e) {
-    throw new Error(`Windows refused the NAV sign-in for ${navConnection().account}: ${e instanceof Error ? e.message : e}`);
+    const first = await request(method, url, { ...headers, Authorization: ntlm.createType1Message(account).replace(/^NTLM /, "Negotiate ") }, undefined, agent);
+    const token = /(?:Negotiate|NTLM)\s+(\S+)/i.exec(first.challenge)?.[1];
+    if (first.status !== 401 || !token) return first;
+    let failed: Error | null = null;
+    const type2 = ntlm.parseType2Message(`NTLM ${token}`, (e) => (failed = e));
+    if (!type2) throw failed ?? new Error("NAV sent an NTLM challenge the portal could not read.");
+    return await request(method, url, { ...headers, Authorization: ntlm.createType3Message(type2, account).replace(/^NTLM /, "Negotiate ") }, body, agent);
   } finally {
-    sspi.FreeCredentialsHandle(credential);
+    agent.destroy();
   }
+}
+
+async function sendFetch(method: Method, url: URL, headers: Record<string, string>, body?: string): Promise<Reply> {
+  const { auth } = navConnection();
+  let authorization: string;
+  if (auth === "navuser") authorization = `Basic ${Buffer.from(`${process.env.NAV_USERNAME}:${process.env.NAV_PASSWORD}`).toString("base64")}`;
+  else {
+    if (process.platform !== "win32") throw new Error("NAV_AUTH=current only works when the portal runs on Windows. In Docker, use NAV_AUTH=windows with NAV_DOMAIN, NAV_USERNAME and NAV_PASSWORD.");
+    // Windows-only package (not installed in Docker): loaded at run time, not followed by the build.
+    const { sspi } = ((await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ SSPI)) as { default: { sspi: Sspi } }).default;
+    const { credential } = sspi.AcquireCredentialsHandle({ packageName: "Negotiate" });
+    try {
+      const ctx = sspi.InitializeSecurityContext({ credential, targetName: `HTTP/${url.hostname}` });
+      if (ctx.contextHandle) sspi.DeleteSecurityContext(ctx.contextHandle);
+      authorization = `Negotiate ${Buffer.from(ctx.SecBufferDesc.buffers[0]).toString("base64")}`;
+    } catch (e) {
+      throw new Error(`Windows refused the NAV sign-in for ${navConnection().account}: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      sspi.FreeCredentialsHandle(credential);
+    }
+  }
+  const res = await fetch(url, { method, headers: { ...headers, Authorization: authorization }, body, signal: AbortSignal.timeout(120_000), cache: "no-store" });
+  return { status: res.status, text: await res.text() };
 }
 
 // The route to NAV drops some connections (e-invoice measured ~13%). Only failed *connects* are retried:
 // the request never reached NAV, so a retried POST cannot create a second record.
-const connectFailed = (e: unknown) => /UND_ERR_CONNECT_TIMEOUT|ECONNREFUSED|ETIMEDOUT/.test(String((e as { cause?: { code?: string } })?.cause?.code));
+const connectFailed = (e: unknown) => {
+  const err = e as { code?: string; cause?: { code?: string } };
+  return /UND_ERR_CONNECT_TIMEOUT|ECONNREFUSED|ETIMEDOUT/.test(String(err?.code ?? err?.cause?.code));
+};
 
-async function call(method: "GET" | "POST" | "PATCH" | "DELETE", pathOrUrl: string, body?: unknown) {
+async function call(method: Method, pathOrUrl: string, body?: unknown) {
   const base = await navBaseUrl();
   if (!base) throw new NavNotConfigured();
   const url = new URL(pathOrUrl.startsWith("http") ? pathOrUrl : `${base}/ODataV4/${pathOrUrl}`);
-  let res: Response | undefined;
+  const headers = {
+    Accept: "application/json",
+    ...(body ? { "Content-Type": "application/json" } : {}),
+    ...(method === "PATCH" || method === "DELETE" ? { "If-Match": "*" } : {}),
+  };
+  const send = navConnection().auth === "windows" ? sendNtlm : sendFetch;
+  let res: Reply | undefined;
   for (let attempt = 1; !res; attempt++) {
     try {
-      res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: await authorization(url.hostname),
-          Accept: "application/json",
-          ...(body ? { "Content-Type": "application/json" } : {}),
-          ...(method === "PATCH" || method === "DELETE" ? { "If-Match": "*" } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(120_000), // a cold NAV can take ~25s for a card page
-        cache: "no-store",
-      });
+      res = await send(method, url, headers, body ? JSON.stringify(body) : undefined);
     } catch (e) {
       if (attempt >= 4 || !connectFailed(e)) throw e;
     }
   }
-  if (!res.ok) {
-    const text = await res.text();
-    let detail = text.slice(0, 300);
+  if (res.status < 200 || res.status >= 300) {
+    let detail = res.text.slice(0, 300);
     try {
-      detail = JSON.parse(text).error?.message ?? detail;
+      detail = JSON.parse(res.text).error?.message ?? detail;
     } catch {}
     // Name the service, not the whole address: the key part of a URL is long, unbroken and says nothing new.
     const service = decodeURIComponent(url.pathname.split("/").pop() ?? "").replace(/\(.*$/, "");
     throw new Error(`NAV refused the request to ${service} (HTTP ${res.status})${detail ? `: ${detail}` : ""}`);
   }
-  return res.status === 204 ? null : res.json();
+  return res.status === 204 || !res.text ? null : JSON.parse(res.text);
 }
 const getJson = (pathOrUrl: string) => call("GET", pathOrUrl);
 
