@@ -38,7 +38,7 @@ The image is built on Playwright's own image, so Chromium for the parking report
 2. Start the database and the portal:
 
 ```bash
-docker compose --profile portal up -d --build
+docker compose up -d --build
 ```
 
 The portal listens on port 23020. Migrations run on start. Report files and screenshots are in the `storage` volume, and the database in `pgdata`; back up both. The server must resolve `*.eadeco.local` (NAV, the domain controllers), as the host does.

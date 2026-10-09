@@ -1,4 +1,4 @@
-# The portal and its Postgres. On the server: put a .env next to this file (see .env.example), then
+# The portal and its Postgres. On the server: a .env next to this file (see .env.example), then
 #   docker compose up -d --build
 # Locally, `pnpm db:up` starts only the database and `pnpm dev` runs the portal.
 services:
@@ -16,10 +16,8 @@ services:
 
   portal:
     build: .
-    image: ed-eadepro-portal
     container_name: ed-eadepro-portal
     restart: unless-stopped
-    profiles: [portal] # `pnpm db:up` leaves it out; `docker compose --profile portal up -d --build` runs it
     depends_on: [db]
     env_file: .env
     environment:
