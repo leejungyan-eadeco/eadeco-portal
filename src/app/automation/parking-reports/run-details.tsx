@@ -2,13 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, CircleNotch, DownloadSimple, ShieldCheck, ShieldWarning, XCircle } from "@phosphor-icons/react";
+import { nextParkingRetry } from "@/lib/cron";
 import { explain } from "@/lib/nav-errors";
+import { myTime } from "../../schedule-editor";
 import type { ParkingRun } from "@/lib/types";
 import { Dialog } from "../../dialog";
 import { verifyParkingRun } from "../../parking-actions";
 import { Badge, btn, fmtDate, fmtDateTime, num, rm, StatusBadge, td, th } from "../../ui";
 
-export type RunRow = ParkingRun & { status: "Processing" | "Created" | "Deleted in NAV" | "Failed" | "Will retry" | "Resolved"; summary: string; net: number };
+export type RunRow = ParkingRun & { status: "Processing" | "Created" | "Deleted in NAV" | "Failed" | "Will retry" | "Resolved"; summary: string; net: number; retryAt?: Date | null };
+
+type SetupSchedule = { status: string; schedule: string; catchUpDays: number; startDate: string };
+
+// Status of a failed parking run. A temporary problem shows "Will retry" only when the schedule will actually try the
+// day again, with when; otherwise it is Failed and someone has to use Fetch a day.
+export function parkingFailure(r: ParkingRun, laterCreated: boolean, setup: SetupSchedule | undefined): Pick<RunRow, "status" | "summary" | "retryAt"> {
+  const x = explain(r.error ?? "", r.errorCode);
+  if (laterCreated) return { status: "Resolved", summary: x.summary, retryAt: null };
+  if (!x.retry) return { status: "Failed", summary: x.summary, retryAt: null };
+  const at = setup ? nextParkingRetry(r.reportDate, setup) : null;
+  return at ? { status: "Will retry", summary: `${x.summary}. Tries again ${myTime(at)}`, retryAt: at } : { status: "Failed", summary: `${x.summary}. Not tried again automatically: use Fetch a day`, retryAt: null };
+}
 
 export const fileUrl = (folder: string, name: string) => `/automation/parking-reports/files/${folder}/${encodeURIComponent(name)}`;
 
@@ -73,7 +87,13 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs font-medium text-ink-3">What to do</p>
-                  <p className="text-ink">{x.action}</p>
+                  <p className="text-ink">
+                    {r.retryAt
+                      ? `Nothing to do. The schedule tries this day again ${myTime(r.retryAt)}.`
+                      : x.retry && r.status === "Failed"
+                        ? "The schedule won't try this day again (it is switched off, or the day is older than its make-up days). Use Fetch a day on the Parking Reports page."
+                        : x.action}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-ink-3">Who fixes it</p>
@@ -186,29 +206,6 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
           </ol>
         </div>
 
-        {r.settings && (
-          <details>
-            <summary className="cursor-pointer text-xs font-medium text-ink-3">Settings this run used</summary>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-              {item("Parking portal", `${r.settings.portalUrl} as ${r.settings.username}`)}
-              {item("Company / customer", `${r.settings.companyCode ?? "–"} / ${r.settings.customerNo || "–"}`)}
-              {item("Columns", `Net "${r.settings.columns.net}", SST "${r.settings.columns.sst}", type "${r.settings.columns.type}" (header row ${r.settings.headerRow})`)}
-              {item(
-                "NAV lines",
-                <ul className="grid gap-0.5">
-                  {r.settings.lines.map((l) => (
-                    <li key={l.label}>
-                      {l.label}: {l.values.join(", ")} → {l.glAccount || "no G/L account"}
-                      {[l.dim1, l.dim2].filter(Boolean).length > 0 && ` (${[l.dim1, l.dim2].filter(Boolean).join(", ")})`}
-                    </li>
-                  ))}
-                </ul>,
-              )}
-              {item("Rows that count", r.settings.countOnly ? `${r.settings.countOnly.column} is ${r.settings.countOnly.values.join(" or ")}` : "Every row")}
-              {item("SST line", r.settings.sstLine ? `${r.settings.sstLine.glAccount}, "${r.settings.sstLine.description || "SST"}"` : "None (left to NAV's VAT)")}
-            </dl>
-          </details>
-        )}
       </div>
     </Dialog>
   );

@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { explain } from "@/lib/nav-errors";
 import type { ParkingRun } from "@/lib/types";
 import { columnHelper, DataTable, RowActions, type Columns } from "../../data-table";
+import { myTime } from "../../schedule-editor";
 import { fmtDate, fmtDateTime, num, rm, StatusBadge } from "../../ui";
-import { RunDetails, type RunRow } from "./run-details";
+import { parkingFailure, RunDetails, type RunRow } from "./run-details";
 
 // One row per report day that has runs, newest first: what it created and how many tries. A day gets at most one
 // draft from the portal; extra tries are failures that were retried (or a Fetch for a day that already had one).
@@ -14,16 +14,17 @@ type Day = { date: string; result: RunRow["status"]; run: RunRow; tries: number 
 
 const col = columnHelper<Day>();
 
-const toRow = (r: ParkingRun, laterCreated: boolean): RunRow => {
+type SetupSchedule = Parameters<typeof parkingFailure>[2];
+
+const toRow = (r: ParkingRun, laterCreated: boolean, setup?: SetupSchedule): RunRow => {
   const net = (r.totals ?? []).reduce((a, t) => a + t.net, 0);
   if (r.result === "Running") return { ...r, net, status: "Processing", summary: "Processing" };
   if (r.result === "Deleted") return { ...r, net, status: "Deleted in NAV", summary: r.note ?? `Draft ${r.navDocument} was deleted in NAV` };
   if (r.result === "Created") return { ...r, net, status: "Created", summary: r.navDocument ?? r.note ?? "" };
-  const x = explain(r.error ?? "", r.errorCode);
-  return { ...r, net, status: laterCreated ? "Resolved" : x.retry ? "Will retry" : "Failed", summary: x.summary };
+  return { ...r, net, ...parkingFailure(r, laterCreated, setup) };
 };
 
-export function DaysTab({ runs }: { runs: ParkingRun[] }) {
+export function DaysTab({ runs, setup }: { runs: ParkingRun[]; setup: SetupSchedule }) {
   const [open, setOpen] = useState<number | null>(null);
   const router = useRouter();
 
@@ -33,10 +34,10 @@ export function DaysTab({ runs }: { runs: ParkingRun[] }) {
     return [...byDate]
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([date, list]) => {
-        const run = toRow(list.find((r) => r.result === "Created") ?? list[0], false);
+        const run = toRow(list.find((r) => r.result === "Created") ?? list[0], false, setup);
         return { date, run, tries: list.length, result: run.status };
       });
-  }, [runs]);
+  }, [runs, setup]);
 
   // While a run is in progress, refresh so its day updates when it finishes.
   const busy = runs.some((r) => r.result === "Running");
@@ -49,7 +50,16 @@ export function DaysTab({ runs }: { runs: ParkingRun[] }) {
   const columns = useMemo<Columns<Day>>(
     () => [
       col.accessor("date", { header: "Report date", cell: (c) => <span className="font-medium whitespace-nowrap">{fmtDate(c.getValue())}</span> }),
-      col.accessor("result", { header: "Result", meta: { filter: "results" }, cell: (c) => <StatusBadge status={c.getValue()} /> }),
+      col.accessor("result", {
+        header: "Result",
+        meta: { filter: "results" },
+        cell: ({ row: { original: d } }) => (
+          <>
+            <StatusBadge status={d.result} />
+            {d.run.retryAt && <div className="mt-0.5 text-xs whitespace-nowrap text-ink-3">Tries again {myTime(d.run.retryAt)}</div>}
+          </>
+        ),
+      }),
       col.accessor((d) => d.run?.navDocument ?? "", { id: "nav", header: "NAV draft", cell: (c) => <span className="tabular-nums">{c.getValue() || <span className="text-ink-3">–</span>}</span> }),
       col.accessor((d) => d.run?.net ?? 0, {
         id: "net",

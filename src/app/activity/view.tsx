@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { explain } from "@/lib/nav-errors";
-import type { ParkingRun, Run } from "@/lib/types";
-import { RunDetails as ParkingRunDetails, type RunRow as ParkingRow } from "../automation/parking-reports/run-details";
+import type { ParkingRun, ParkingSetupRow, Run } from "@/lib/types";
+import { parkingFailure, RunDetails as ParkingRunDetails } from "../automation/parking-reports/run-details";
 import { columnHelper, DataTable, RowActions, type Columns } from "../data-table";
 import { Dialog } from "../dialog";
 import { Badge, fmtDate, fmtDateTime, StatusBadge } from "../ui";
@@ -24,6 +24,7 @@ type Row = {
   status: Status;
   summary: string;
   note: string | null;
+  retryAt?: Date | null;
   open: () => void;
 };
 
@@ -92,7 +93,7 @@ function InvoiceRunDetails({ run: r, status, onClose }: { run: Run; status: Stat
   );
 }
 
-export function RunsTable({ runs, parkingRuns, automation }: { runs: Run[]; parkingRuns: ParkingRun[]; automation?: string }) {
+export function RunsTable({ runs, parkingRuns, setups, automation }: { runs: Run[]; parkingRuns: ParkingRun[]; setups: ParkingSetupRow[]; automation?: string }) {
   // What is open, by id: the panel then follows the fresh data as the list refreshes (a run in progress fills in).
   const [viewing, setViewing] = useState<{ invoice: Run; status: Status } | { parkingId: number } | null>(null);
   const router = useRouter();
@@ -116,7 +117,7 @@ export function RunsTable({ runs, parkingRuns, automation }: { runs: Run[]; park
             ? { status: "Deleted in NAV" as const, summary: r.note ?? `Draft ${r.navDocument} was deleted in NAV` }
           : r.result === "Created"
             ? { status: "Created" as const, summary: r.navDocument ?? r.note ?? "" }
-            : statusOf(r.result, r.error, r.errorCode, createdParking.has(`${r.setupId}|${r.reportDate}`));
+            : parkingFailure(r, createdParking.has(`${r.setupId}|${r.reportDate}`), setups.find((x) => x.id === r.setupId));
       return {
         key: `p${r.id}`, automation: "Parking report", at: r.at, triggeredBy: r.triggeredBy, companyName: r.companyName ?? "", subject: r.setupName,
         periodDate: r.reportDate, note: null, ...s, open: () => setViewing({ parkingId: r.id }),
@@ -137,7 +138,7 @@ export function RunsTable({ runs, parkingRuns, automation }: { runs: Run[]; park
     if (!viewing || !("parkingId" in viewing)) return null;
     const r = parkingRuns.find((p) => p.id === viewing.parkingId);
     const row = rows.find((x) => x.key === `p${viewing.parkingId}`);
-    return r && row ? { ...r, net: (r.totals ?? []).reduce((a, t) => a + t.net, 0), status: row.status, summary: row.summary } : null;
+    return r && row ? { ...r, net: (r.totals ?? []).reduce((a, t) => a + t.net, 0), status: row.status, summary: row.summary, retryAt: row.retryAt ?? null } : null;
   })();
 
   const columns = useMemo<Columns<Row>>(

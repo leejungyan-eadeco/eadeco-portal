@@ -114,7 +114,18 @@ async function parkingSetupRun(scheduledFor: Date, context: { setupId: number })
   const dates = from > yesterday ? [] : await DBOS.runStep(() => missingParkingDates(s.id, from, yesterday), { name: "find-missing" });
   const total = { created: 0, failed: 0 };
   for (const date of dates) {
-    const r = await DBOS.runStep(() => runParkingReport(s.id, date, "Scheduler").then((o) => o.result, () => "Failed" as const), { name: `report-${date}` });
+    // A parking portal blip (page not loading, timeout) is tried again within this run: up to 3 attempts, a minute
+    // apart, before the day is left for the next run. Each attempt is its own run in Activity.
+    const r = await DBOS.runStep(
+      async () => {
+        for (let attempt = 1; ; attempt++) {
+          const o = await runParkingReport(s.id, date, "Scheduler").catch(() => null);
+          if (o?.result === "Created" || attempt >= 3 || o?.errorCode !== "PARKING_PORTAL") return o?.result ?? "Failed";
+          await new Promise((wait) => setTimeout(wait, 60_000));
+        }
+      },
+      { name: `report-${date}` },
+    );
     total[r === "Created" ? "created" : "failed"]++;
   }
   DBOS.logger.info(`Parking report "${s.name}" up to ${yesterday}: ${total.created} created, ${total.failed} failed (${dates.length} missing).`);
