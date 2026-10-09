@@ -3,7 +3,9 @@
 // and whether trying again can help. The raw message is always kept for IT.
 // Works on the stored message text, so runs recorded before the codes existed are sorted too.
 
-export type ErrorCode = "NAV_UNREACHABLE" | "NAV_BUSY" | "NAV_SIGNIN" | "NAV_PERMISSION" | "NAV_SERVICE" | "INVOICE_DATA" | "PORTAL_ERROR";
+export type ErrorCode =
+  | "NAV_UNREACHABLE" | "NAV_BUSY" | "NAV_SIGNIN" | "NAV_PERMISSION" | "NAV_SERVICE" | "INVOICE_DATA" | "PORTAL_ERROR"
+  | "PARKING_SETUP" | "PARKING_PORTAL" | "PARKING_SIGNIN" | "REPORT_FORMAT";
 
 type Info = { retry: boolean; title: string; action: string; owner: string };
 
@@ -16,14 +18,33 @@ export const errorInfo: Record<ErrorCode, Info> = {
   INVOICE_DATA: {
     retry: false,
     title: "NAV didn't accept this invoice",
-    action: "Edit the recurring invoice and fix what NAV mentions. The portal tries again after you save it.",
+    action: "Fix what NAV mentions in the recurring invoice (or the parking setup) and save. The portal tries again after that.",
     owner: "Whoever looks after this recurring invoice",
+  },
+  // Parking report. Errors the portal raises itself start with "Parking setup:", "Parking portal..." or "Parking report:".
+  PARKING_SETUP: { retry: false, title: "This parking setup isn't complete", action: "Edit the setup on the Parking reports page and fill in what's missing.", owner: "Whoever looks after this setup" },
+  PARKING_PORTAL: {
+    retry: true,
+    title: "Couldn't get the report from the parking portal",
+    action: "Nothing to do. The portal tries again on its next run. If it keeps happening, the step screenshots show where it stopped; tell IT.",
+    owner: "No one",
+  },
+  PARKING_SIGNIN: { retry: false, title: "The parking portal refused the sign-in", action: "Edit the setup and check the portal username and password (it may have been changed in the parking portal).", owner: "Whoever looks after this setup" },
+  REPORT_FORMAT: {
+    retry: false,
+    title: "The parking report didn't match the settings",
+    action: "Open the Excel file from this run and check it against the setup (columns and payment types). The portal tries again on its next run.",
+    owner: "Whoever looks after this setup",
   },
   PORTAL_ERROR: { retry: true, title: "Something unexpected went wrong", action: "The portal tries again on its next run. If it keeps happening, tell IT.", owner: "IT" },
 };
 
 // Order matters: the most specific causes first.
 const rules: [ErrorCode, RegExp][] = [
+  ["PARKING_SETUP", /^Parking setup:/],
+  ["PARKING_SIGNIN", /^Parking portal sign-in/],
+  ["PARKING_PORTAL", /^Parking portal/],
+  ["REPORT_FORMAT", /^Parking report:/],
   ["NAV_SIGNIN", /logon attempt failed|refused the NAV sign-in|HTTP 401|answered 401|InvalidCredentials|rejected the client credentials/i],
   ["NAV_PERMISSION", /HTTP 403|answered 403|do not have the following permissions|not have permission/i],
   ["NAV_BUSY", /locked|another user has modified|deadlock/i],
@@ -41,5 +62,5 @@ const navWords = (raw: string) => raw.replace(/^NAV (refused the request to|answ
 export function explain(raw: string, code?: string | null) {
   const c = (code && code in errorInfo ? code : classify(raw)) as ErrorCode;
   const info = errorInfo[c];
-  return { code: c, ...info, summary: c === "INVOICE_DATA" ? `${info.title}: ${navWords(raw)}` : info.title };
+  return { code: c, ...info, summary: c === "INVOICE_DATA" ? `${info.title}: ${navWords(raw)}` : c === "REPORT_FORMAT" || c === "PARKING_SETUP" ? raw.replace(/^Parking (report|setup): /, "") : info.title };
 }

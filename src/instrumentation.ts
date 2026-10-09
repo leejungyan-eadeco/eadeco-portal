@@ -13,10 +13,18 @@ export async function register() {
       navServiceDefs.map((d) => d.key),
       navServiceDefs.map((d) => d.fallback),
     ]);
+    // The parking portal account from .env goes into the first setup (encrypted) until someone types one in.
+    const { CARPARK_PORTAL_USERNAME: user, CARPARK_PORTAL_PASSWORD: pass, CREDENTIALS_KEY: key } = process.env;
+    if (user && pass && key) {
+      const { seal } = await import("./lib/secret");
+      await db.query(`update parking_setups set username = $1, password_enc = $2 where id = (select min(id) from parking_setups) and username = '' and password_enc is null`, [user, seal(pass)]);
+    }
   } catch (e) {
     console.error("Could not set up the portal database. Is it running (docker compose up -d db)?", e);
     return;
   }
+  const { closeInterruptedRuns } = await import("./lib/parking");
+  await closeInterruptedRuns().catch((e) => console.error("Could not close interrupted parking runs", e));
   const { startScheduler } = await import("./lib/scheduler");
   try {
     await startScheduler();

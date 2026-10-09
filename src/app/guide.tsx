@@ -24,9 +24,9 @@ const guides = {
     tour: [
       step('[data-tour="stats"]', "At a glance", "What is due this week, anything that failed, and how many recurring invoices are running."),
       step('[data-tour="upcoming"]', "Coming up", "Recurring invoices the portal will create in NAV in the next 14 days, soonest first.", "top"),
-      step('[data-tour="attention"]', "Needs attention", "Drafts NAV did not accept and that are still not created. Open Run history to see why.", "top"),
+      step('[data-tour="attention"]', "Needs attention", "Drafts NAV did not accept and that are still not created. Open Activity to see why.", "top"),
       step('aside a[href="/automation/recurring-invoices"]', "Recurring invoices", "Set up the invoices that repeat. This is where most work happens.", "right"),
-      step('aside a[href="/runs"]', "Run history", "Every attempt to create a draft in NAV, with the NAV number or what went wrong.", "right"),
+      step('aside a[href="/activity"]', "Activity", "Every run of every automation, with the NAV number or what went wrong.", "right"),
     ],
   },
   "recurring-invoices": {
@@ -45,7 +45,7 @@ const guides = {
     ],
   },
   runs: {
-    title: "Run history",
+    title: "Activity",
     Content: Runs,
     tour: [
       step('[data-tour="search"]', "Search", "Find runs by company, customer, vendor or NAV document number."),

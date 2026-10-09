@@ -92,7 +92,7 @@ export function NavSettingsView({ connection, services }: { connection: { baseUr
   return (
     <>
       <PageHeader
-        title="NAV connection"
+        title="NAV Connection"
         description="Which NAV 2018 web services the portal uses. Change a name here when IT republishes a service under a different name."
         actions={
           <button className={btn.secondary} onClick={testAll}>

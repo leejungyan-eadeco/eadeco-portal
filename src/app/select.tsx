@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { Check } from "@phosphor-icons/react";
 import ReactSelect, { type ClassNamesConfig } from "react-select";
+import CreatableSelect from "react-select/creatable";
 
 // search: extra text that typing also matches (e.g. email, department) without showing it in the list.
 export type SelectOption = { value: string; label: string; search?: string };
@@ -111,6 +112,36 @@ export function MultiSelect({ value, options, onChange, noun, label }: { value: 
         )
       }
       classNames={{ ...classNames(false), option: ({ isFocused }) => `cursor-pointer px-3 py-2 text-sm text-ink ${isFocused ? "bg-subtle" : ""}` }}
+    />
+  );
+}
+
+// Several free-text values shown as chips (e.g. payment types). Suggests `options`; anything else can be typed and added.
+export function TagSelect({ value, options, onChange, label, placeholder = "Pick or type", disabled = false }: { value: string[]; options: string[]; onChange: (value: string[]) => void; label: string; placeholder?: string; disabled?: boolean }) {
+  const id = useId();
+  const all = [...new Set([...options, ...value])].filter(Boolean).map((v) => ({ value: v, label: v }));
+  return (
+    <CreatableSelect<SelectOption, true>
+      unstyled
+      isMulti
+      instanceId={id}
+      aria-label={label}
+      options={all}
+      value={all.filter((o) => value.includes(o.value))}
+      onChange={(os) => onChange(os.map((o) => o.value.trim()).filter(Boolean))}
+      isDisabled={disabled}
+      formatCreateLabel={(input) => `Add "${input}"`}
+      placeholder={placeholder}
+      menuPosition="fixed"
+      menuPlacement="auto"
+      noOptionsMessage={() => "Type a payment type to add it"}
+      classNames={{
+        ...classNames(true),
+        multiValue: () => "flex items-center gap-1 rounded border border-line bg-subtle py-0.5 pl-1.5 pr-0.5 text-xs text-ink",
+        // Show the whole value: payment types like "TNG Card" and "TNG Seamless" differ only at the end.
+        multiValueLabel: () => "whitespace-nowrap",
+        multiValueRemove: () => "rounded px-0.5 text-ink-3 hover:bg-bad-soft hover:text-bad",
+      }}
     />
   );
 }

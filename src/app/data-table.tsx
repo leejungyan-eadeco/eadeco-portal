@@ -57,12 +57,14 @@ export function DataTable<T extends RowData>({
   search,
   empty,
   minWidth = 800,
+  filters: startFilters = [],
 }: {
   data: T[];
   columns: Columns<T>;
   search?: string; // placeholder; leave out for no search box
   empty: { title: string; hint: string };
   minWidth?: number;
+  filters?: { id: string; value: string[] }[]; // pick-list filters to start with, e.g. from a link
 }) {
   const [q, setQ] = useState("");
   // Pick-list columns keep rows whose value is one of the picked values.
@@ -78,7 +80,7 @@ export function DataTable<T extends RowData>({
     onGlobalFilterChange: (u) => setQ(typeof u === "function" ? u(q) : u),
     globalFilterFn: "includesString",
     getColumnCanGlobalFilter: (c) => c.id !== "actions",
-    initialState: { pagination: { pageIndex: 0, pageSize: 25 } },
+    initialState: { pagination: { pageIndex: 0, pageSize: 25 }, columnFilters: startFilters },
   });
 
   const rows = table.getRowModel().rows;

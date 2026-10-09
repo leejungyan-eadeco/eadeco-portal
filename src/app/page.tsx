@@ -2,31 +2,35 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle, WarningCircle } from "@phosphor-icons/react/ssr";
 import { explain } from "@/lib/nav-errors";
 import { todayMY } from "@/lib/schedule";
-import { listCompanies, listInvoices, listRuns } from "@/lib/store";
+import { listCompanies, listInvoices, listParkingRuns, listRuns } from "@/lib/store";
 import { invoiceTotal } from "@/lib/types";
 import { daysFromToday, fmtDate, num, PageHeader, panel, relativeDay, rm, td, th } from "./ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
-  const [companies, invoices, runs] = await Promise.all([listCompanies(), listInvoices(), listRuns(50)]);
+  const [companies, invoices, runs, parkingRuns] = await Promise.all([listCompanies(), listInvoices(), listRuns(50), listParkingRuns(50)]);
   const upcoming = invoices
     .filter((i) => i.status === "Active" && i.nextDate && daysFromToday(i.nextDate) <= 14)
     .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
   const dueThisWeek = upcoming.filter((i) => daysFromToday(i.nextDate!) <= 7);
-  // Only problems a person must deal with: failures not yet resolved by a later run, and either needing a fix
-  // (sign-in, invoice data…) or a NAV outage still failing after 3 attempts. Short hiccups stay out of sight.
-  // Runs are newest first, so the first failure seen per invoice and date is the latest one.
-  const key = (r: { invoiceId: number; periodDate: string }) => `${r.invoiceId}|${r.periodDate}`;
-  const created = new Set(runs.filter((r) => r.result === "Created").map(key));
+  // Only problems a person must deal with, from every automation: failures not yet resolved by a later run, and
+  // either needing a fix (sign-in, invoice data…) or an outage still failing after 3 attempts. Short hiccups stay
+  // out of sight. Runs are newest first, so the first failure seen per item and date is the latest one.
+  type Attempt = { key: string; result: string; error: string | null; errorCode: string | null; subject: string; date: string; company: string; automation: string };
+  const all: Attempt[] = [
+    ...runs.map((r) => ({ key: `i${r.invoiceId}|${r.periodDate}`, result: r.result, error: r.error, errorCode: r.errorCode, subject: r.partyName, date: r.periodDate, company: r.companyName, automation: "Recurring invoice" })),
+    ...parkingRuns.map((r) => ({ key: `p${r.setupId}|${r.reportDate}`, result: r.result, error: r.error, errorCode: r.errorCode, subject: r.setupName, date: r.reportDate, company: r.companyName ?? "", automation: "Parking report" })),
+  ];
+  const created = new Set(all.filter((r) => r.result === "Created").map((r) => r.key));
   const attempts = new Map<string, number>();
-  for (const r of runs) if (r.result === "Failed") attempts.set(key(r), (attempts.get(key(r)) ?? 0) + 1);
+  for (const r of all) if (r.result === "Failed") attempts.set(r.key, (attempts.get(r.key) ?? 0) + 1);
   const seen = new Set<string>();
-  const failed = runs
+  const failed = all
     .filter((r) => {
-      if (r.result !== "Failed" || created.has(key(r)) || seen.has(key(r))) return false;
-      seen.add(key(r));
-      return !explain(r.error ?? "", r.errorCode).retry || (attempts.get(key(r)) ?? 0) >= 3;
+      if (r.result !== "Failed" || created.has(r.key) || seen.has(r.key)) return false;
+      seen.add(r.key);
+      return !explain(r.error ?? "", r.errorCode).retry || (attempts.get(r.key) ?? 0) >= 3;
     })
     .map((r) => ({ ...r, summary: explain(r.error ?? "", r.errorCode).summary }));
   const active = invoices.filter((i) => i.status === "Active").length;
@@ -35,7 +39,7 @@ export default async function Overview() {
 
   const stats = [
     { label: "Invoices due in 7 days", value: dueThisWeek.length, note: `RM ${rm(dueThisWeek.reduce((t, i) => t + invoiceTotal(i), 0))} in total` },
-    { label: "Failed runs", value: failed.length, note: failed.length ? "Not yet created in NAV" : "None", alert: failed.length > 0 },
+    { label: "Failed runs", value: failed.length, note: failed.length ? "Need someone to act" : "None", alert: failed.length > 0 },
     { label: "Active recurring invoices", value: active, note: `${paused} paused` },
     { label: "Companies set up", value: companies.filter((c) => c.active).length, note: `${companies.length} in total, set by IT` },
   ];
@@ -112,8 +116,8 @@ export default async function Overview() {
         <section data-tour="attention" className={panel}>
           <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
             <h2 className="font-semibold">Needs attention</h2>
-            <Link href="/runs" className="inline-flex items-center gap-1 text-sm font-medium text-accent-ink hover:underline">
-              Run history <ArrowRight size={14} />
+            <Link href="/activity" className="inline-flex items-center gap-1 text-sm font-medium text-accent-ink hover:underline">
+              Activity <ArrowRight size={14} />
             </Link>
           </div>
           {failed.length === 0 ? (
@@ -123,14 +127,14 @@ export default async function Overview() {
           ) : (
             <ul className="divide-y divide-line">
               {failed.map((r) => (
-                <li key={r.id} className="flex gap-3 px-5 py-3">
+                <li key={r.key} className="flex gap-3 px-5 py-3">
                   <WarningCircle size={20} weight="fill" className="mt-0.5 shrink-0 text-bad" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
-                      {r.partyName}, {fmtDate(r.periodDate)}
+                      {r.subject}, {fmtDate(r.date)}
                     </p>
                     <p className="truncate text-xs text-ink-3" title={r.summary}>
-                      {r.companyName} · {r.summary}
+                      {r.automation} · {r.summary}
                     </p>
                   </div>
                 </li>

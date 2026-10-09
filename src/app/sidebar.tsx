@@ -14,9 +14,9 @@ const groups: {
   {
     label: "Automation",
     items: [
-      { href: "/automation/recurring-invoices", label: "Recurring invoices", icon: Receipt },
-      { href: "/automation/parking-reports", label: "Parking reports", icon: Car, soon: true },
-      { href: "/runs", label: "Run history", icon: ClockCounterClockwise },
+      { href: "/automation/recurring-invoices", label: "Recurring Invoices", icon: Receipt },
+      { href: "/automation/parking-reports", label: "Parking Reports", icon: Car },
+      { href: "/activity", label: "Activity", icon: ClockCounterClockwise },
     ],
   },
   {
@@ -24,7 +24,7 @@ const groups: {
     adminOnly: true,
     items: [
       { href: "/settings/companies", label: "Companies", icon: Buildings },
-      { href: "/settings/nav", label: "NAV connection", icon: PlugsConnected },
+      { href: "/settings/nav", label: "NAV Connection", icon: PlugsConnected },
       { href: "/settings/scheduler", label: "Scheduler", icon: CalendarCheck },
       { href: "/settings/users", label: "Users", icon: UsersThree },
     ],
