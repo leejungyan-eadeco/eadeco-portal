@@ -90,36 +90,50 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
           </div>
         )}
 
-        {r.totals && (
-          <div className="overflow-hidden rounded-lg border border-line">
-            <table className="w-full">
-              <thead className="bg-subtle">
-                <tr>
-                  <th className={th}>NAV line</th>
-                  <th className={`${th} text-right`}>Rows</th>
-                  <th className={`${th} text-right`}>Net sales (RM)</th>
-                  <th className={`${th} text-right`}>SST in report (RM)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {r.totals.map((t) => (
-                  <tr key={t.label}>
-                    <td className={td}>{t.label}</td>
-                    <td className={`${td} ${num}`}>{t.count}</td>
-                    <td className={`${td} ${num}`}>{rm(t.net)}</td>
-                    <td className={`${td} ${num}`}>{rm(t.sst)}</td>
+        {r.totals && (() => {
+          // The invoice as NAV gets it: one row per line, then the SST line (when the setup adds one), then the total.
+          const lines = r.settings?.lines ?? [];
+          const sstLine = r.settings?.sstLine ?? null;
+          const sst = r.totals.reduce((a, t) => a + t.sst, 0);
+          const net = r.totals.reduce((a, t) => a + t.net, 0);
+          return (
+            <div className="overflow-hidden rounded-lg border border-line">
+              <table className="w-full">
+                <thead className="bg-subtle">
+                  <tr>
+                    <th className={th}>Invoice line</th>
+                    <th className={th}>G/L account</th>
+                    <th className={`${th} text-right`}>Rows</th>
+                    <th className={`${th} text-right`}>Amount (RM)</th>
                   </tr>
-                ))}
-                <tr className="font-medium">
-                  <td className={td}>Total{r.rowCount != null && <span className="font-normal text-ink-3"> ({r.rowCount.toLocaleString()} rows in the report)</span>}</td>
-                  <td className={`${td} ${num}`}>{r.totals.reduce((a, t) => a + t.count, 0)}</td>
-                  <td className={`${td} ${num}`}>{rm(r.totals.reduce((a, t) => a + t.net, 0))}</td>
-                  <td className={`${td} ${num}`}>{rm(r.totals.reduce((a, t) => a + t.sst, 0))}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {r.totals.map((t) => (
+                    <tr key={t.label}>
+                      <td className={td}>{t.label}</td>
+                      <td className={`${td} tabular-nums`}>{lines.find((l) => l.label === t.label)?.glAccount ?? "–"}</td>
+                      <td className={`${td} ${num}`}>{t.count}</td>
+                      <td className={`${td} ${num}`}>{rm(t.net)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className={td}>{sstLine ? sstLine.description || "SST" : <span className="text-ink-3">SST in the report (left to NAV&apos;s VAT)</span>}</td>
+                    <td className={`${td} tabular-nums`}>{sstLine?.glAccount ?? "–"}</td>
+                    <td className={`${td} ${num}`} />
+                    <td className={`${td} ${num} ${sstLine ? "" : "text-ink-3"}`}>{rm(sst)}</td>
+                  </tr>
+                  <tr className="font-medium">
+                    <td className={td} colSpan={2}>
+                      Total{r.rowCount != null && <span className="font-normal text-ink-3"> ({r.rowCount.toLocaleString()} rows in the report)</span>}
+                    </td>
+                    <td className={`${td} ${num}`}>{r.totals.reduce((a, t) => a + t.count, 0)}</td>
+                    <td className={`${td} ${num}`}>{rm(sstLine ? net + sst : net)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
 
         {/* Timeline: every step in order, its time on the left, with its screenshot and the file fingerprint check. */}
         <div>
