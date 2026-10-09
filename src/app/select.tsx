@@ -18,7 +18,7 @@ const classNames = (compact: boolean): ClassNamesConfig<SelectOption, boolean> =
       isDisabled ? "cursor-not-allowed border-line-strong bg-subtle text-ink-3" : isFocused ? "border-accent bg-surface ring-2 ring-accent/25" : "border-line-strong bg-surface hover:border-ink-3"
     }`,
   valueContainer: () => "gap-1",
-  placeholder: () => "text-ink-3",
+  placeholder: () => "min-w-0 truncate text-ink-3",
   singleValue: () => "text-ink",
   input: () => "text-ink",
   indicatorsContainer: () => "gap-0.5 text-ink-3",
@@ -95,7 +95,16 @@ export function MultiSelect({ value, options, onChange, noun, label }: { value: 
       controlShouldRenderValue={false}
       hideSelectedOptions={false}
       closeMenuOnSelect={false}
-      placeholder={<span className={value.length ? "text-ink" : ""}>{summary}</span>}
+      // Picked values show as one pill, cut short on one line (full name on hover) so long company names don't wrap.
+      placeholder={
+        value.length ? (
+          <span title={picked.map((o) => o.label).join(", ")} className="inline-flex max-w-full rounded-full border border-accent/30 bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-ink">
+            <span className="min-w-0 truncate">{summary}</span>
+          </span>
+        ) : (
+          summary
+        )
+      }
       menuPosition="fixed"
       menuPlacement="auto"
       noOptionsMessage={() => "No matches"}

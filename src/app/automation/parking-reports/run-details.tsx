@@ -209,16 +209,7 @@ export function RunDetails({ run: r, onClose, onRetried }: { run: RunRow; onClos
                 </li>
               );
             })}
-            {(r.status === "Failed" || r.status === "Will retry") && (
-          <div className="flex flex-wrap items-center gap-3">
-            <button className={`${btn.primary} disabled:pointer-events-none disabled:opacity-50`} disabled={retrying} onClick={retry}>
-              <ArrowClockwise size={16} className={retrying ? "animate-spin" : ""} /> {retrying ? "Starting" : "Retry now"}
-            </button>
-            {retryError && <span className="text-sm text-bad">{retryError}</span>}
-          </div>
-        )}
-
-        {processing && (
+            {processing && (
               <li className="grid grid-cols-[4.5rem_1.5rem_minmax(0,1fr)] gap-x-3">
                 <span />
                 <span className="flex justify-center text-info">
