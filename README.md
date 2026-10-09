@@ -38,10 +38,12 @@ The image is built on Playwright's own image, so Chromium for the parking report
 2. Start the database and the portal:
 
 ```bash
-docker compose --profile portal up -d --build
+docker compose up -d --build
 ```
 
-The portal listens on port 23020. Migrations run on start. Report files and screenshots are in the `storage` volume, and the database in `pgdata`; back up both. The server must resolve `*.eadeco.local` (NAV, the domain controllers), as the host does.
+The portal listens on `PORTAL_PORT` (23020). Migrations run on start.
+
+**Staging and production** run the same image with different settings: one folder per environment (e.g. `eadepro-staging/` with NAV TEST and `PORTAL_PORT=23030`, `eadepro-production/` with live NAV and 23020), each with its own `.env`, and `docker compose up -d --build` in each. Compose names containers and volumes after the folder, so they never share a database or files. What users test on staging is exactly what goes live. Report files and screenshots are in the `storage` volume, and the database in `pgdata`; back up both. The server must resolve `*.eadeco.local` (NAV, the domain controllers), as the host does.
 
 ## Login and access
 

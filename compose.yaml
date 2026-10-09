@@ -1,32 +1,32 @@
-# The portal and its Postgres. On the server: put a .env next to this file (see .env.example), then
+# The portal and its Postgres. On the server: a .env next to this file (see .env.example), then
 #   docker compose up -d --build
+# Staging and production: one folder each (e.g. eadepro-staging/, eadepro-production/), each with its own .env.
+# Compose names containers and volumes after the folder, so the two never share a database or files.
 # Locally, `pnpm db:up` starts only the database and `pnpm dev` runs the portal.
 services:
   db:
     image: postgres:16
-    container_name: ed-eadepro-db
     restart: unless-stopped # comes back after Docker or the server restarts
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eadepro}
       POSTGRES_DB: eadepro_portal
     ports:
-      - "23021:5432"
+      - "${DB_PORT:-23021}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
   portal:
-    build: .
-    image: ed-eadepro-portal
-    container_name: ed-eadepro-portal
+    build:
+      context: .
+      target: production
     restart: unless-stopped
-    profiles: [portal] # `pnpm db:up` leaves it out; `docker compose --profile portal up -d --build` runs it
     depends_on: [db]
     env_file: .env
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-eadepro}@db:5432/eadepro_portal
       NODE_ENV: production
     ports:
-      - "23020:23020"
+      - "${PORTAL_PORT:-23020}:23020"
     volumes:
       - storage:/app/storage # report files and screenshots: back this volume up
 volumes:

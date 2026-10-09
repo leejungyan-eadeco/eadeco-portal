@@ -1,6 +1,8 @@
 # EADEPRO Business Portal. Built on Playwright's own image so the parking report's Chromium and its Linux libraries
 # are already there (the tag must match the playwright version in package.json).
-#   docker compose --profile portal up -d --build
+#   docker compose up -d --build
+# Two stages: "build" installs packages and builds the app; "production" keeps only what runs. Staging and
+# production both run the production stage; only their .env differs.
 
 FROM mcr.microsoft.com/playwright:v1.63.0-noble AS build
 WORKDIR /app
@@ -15,7 +17,7 @@ RUN pnpm build \
       mkdir -p ".next/standalone/$d" && cp -r "$d/." ".next/standalone/$d/"; \
     done
 
-FROM mcr.microsoft.com/playwright:v1.63.0-noble
+FROM mcr.microsoft.com/playwright:v1.63.0-noble AS production
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=23020 \
