@@ -13,12 +13,25 @@ services:
       - "23021:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck: # the portal waits for this, so its migrations don't run before Postgres accepts connections
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eadepro_portal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   portal:
     build: .
     container_name: ed-eadepro-portal
     restart: unless-stopped
-    depends_on: [db]
+    depends_on:
+      db:
+        condition: service_healthy
+    # EADECO's DNS servers, asked directly: on Linux hosts using systemd-resolved, Docker's default DNS goes through
+    # the host resolver, which refuses *.eadeco.local (".local" is treated as local-network multicast names).
+    # They also resolve outside names (the parking portal, GitHub).
+    dns:
+      - 192.168.41.182
+      - 10.30.10.209
     env_file: .env
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-eadepro}@db:5432/eadepro_portal
