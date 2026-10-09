@@ -285,7 +285,7 @@ export async function testSignIn(c: Credentials): Promise<void> {
 
 // ---------- 3. One setup, one day, end to end ----------
 
-export type ParkingOutcome = { result: "Created" | "Failed"; navDocument: string | null; error: string | null; errorCode: string | null; existing: boolean; posted?: string };
+export type ParkingOutcome = { result: "Created" | "Failed"; navDocument: string | null; error: string | null; errorCode: string | null; existing: boolean; posted?: string; runId?: number };
 
 async function pruneEvidence() {
   const cutoff = Date.now() - KEEP_DAYS * 864e5;
@@ -438,13 +438,18 @@ export async function runParkingReport(setupId: number, date: string, trigger: s
         `update parking_runs set result = $2, nav_document_no = $3, error = $4, error_code = $5, note = $6, totals = $7, row_count = $8 where id = $1`,
         [runId, result, navDocument, error, errorCode, note, report && JSON.stringify(report.totals), report?.rows.length ?? null],
       );
-      return { result, navDocument, error, errorCode, existing: false };
+      return { result, navDocument, error, errorCode, existing: false, runId };
     } finally {
       await client.query(`select pg_advisory_unlock(7103, $1)`, [lockKey]);
     }
   } finally {
     client.release();
   }
+}
+
+// A failed run whose next automatic attempt is due in `minutes`.
+export async function markRetry(runId: number, minutes: number) {
+  await db.query(`update parking_runs set retry_at = now() + make_interval(mins => $2) where id = $1`, [runId, minutes]);
 }
 
 // A run still marked Running when the portal starts was cut off (the portal stopped mid-run).

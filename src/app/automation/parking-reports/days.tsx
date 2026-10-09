@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import type { ParkingRun } from "@/lib/types";
 import { columnHelper, DataTable, RowActions, type Columns } from "../../data-table";
 import { myTime } from "../../schedule-editor";
-import { fmtDate, fmtDateTime, num, rm, StatusBadge } from "../../ui";
+import { ArrowClockwise } from "@phosphor-icons/react";
+import { runParkingNow } from "../../parking-actions";
+import { btn, fmtDate, fmtDateTime, num, rm, StatusBadge } from "../../ui";
 import { parkingFailure, RunDetails, type RunRow } from "./run-details";
 
 // One row per report day that has runs, newest first: what it created and how many tries. A day gets at most one
@@ -14,19 +16,27 @@ type Day = { date: string; result: RunRow["status"]; run: RunRow; tries: number 
 
 const col = columnHelper<Day>();
 
-type SetupSchedule = Parameters<typeof parkingFailure>[2];
-
-const toRow = (r: ParkingRun, laterCreated: boolean, setup?: SetupSchedule): RunRow => {
+const toRow = (r: ParkingRun, laterCreated: boolean): RunRow => {
   const net = (r.totals ?? []).reduce((a, t) => a + t.net, 0);
   if (r.result === "Running") return { ...r, net, status: "Processing", summary: "Processing" };
   if (r.result === "Deleted") return { ...r, net, status: "Deleted in NAV", summary: r.note ?? `Draft ${r.navDocument} was deleted in NAV` };
   if (r.result === "Created") return { ...r, net, status: "Created", summary: r.navDocument ?? r.note ?? "" };
-  return { ...r, net, ...parkingFailure(r, laterCreated, setup) };
+  return { ...r, net, ...parkingFailure(r, laterCreated) };
 };
 
-export function DaysTab({ runs, setup }: { runs: ParkingRun[]; setup: SetupSchedule }) {
+export function DaysTab({ runs, onNotice }: { runs: ParkingRun[]; onNotice: (message: string) => void }) {
   const [open, setOpen] = useState<number | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const router = useRouter();
+  const setupId = runs[0]?.setupId;
+  const retry = async (date: string) => {
+    if (!setupId) return;
+    setRetrying(date);
+    const r = await runParkingNow(setupId, date);
+    setRetrying(null);
+    onNotice(r.ok ? r.data : r.error);
+    router.refresh();
+  };
 
   const days = useMemo<Day[]>(() => {
     const byDate = new Map<string, ParkingRun[]>();
@@ -34,13 +44,13 @@ export function DaysTab({ runs, setup }: { runs: ParkingRun[]; setup: SetupSched
     return [...byDate]
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([date, list]) => {
-        const run = toRow(list.find((r) => r.result === "Created") ?? list[0], false, setup);
+        const run = toRow(list.find((r) => r.result === "Created") ?? list[0], false);
         return { date, run, tries: list.length, result: run.status };
       });
-  }, [runs, setup]);
+  }, [runs]);
 
-  // While a run is in progress, refresh so its day updates when it finishes.
-  const busy = runs.some((r) => r.result === "Running");
+  // While a run is in progress or a retry is pending, refresh so the day updates.
+  const busy = runs.some((r) => r.result === "Running" || (r.retryAt && Date.parse(r.retryAt) > Date.now()));
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => router.refresh(), 3000);
@@ -85,7 +95,15 @@ export function DaysTab({ runs, setup }: { runs: ParkingRun[]; setup: SetupSched
       col.display({
         id: "actions",
         header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row: { original: d } }) => (d.run ? <RowActions name={`run for ${fmtDate(d.date)}`} onView={() => setOpen(d.run!.id)} /> : null),
+        cell: ({ row: { original: d } }) => (
+          <RowActions name={`run for ${fmtDate(d.date)}`} onView={() => setOpen(d.run.id)}>
+            {(d.result === "Failed" || d.result === "Will retry") && (
+              <button className={btn.icon} title="Retry now" aria-label={`Retry ${fmtDate(d.date)}`} onClick={() => retry(d.date)} disabled={retrying === d.date}>
+                <ArrowClockwise size={16} className={retrying === d.date ? "animate-spin" : ""} />
+              </button>
+            )}
+          </RowActions>
+        ),
       }),
     ],
     [],
@@ -96,7 +114,7 @@ export function DaysTab({ runs, setup }: { runs: ParkingRun[]; setup: SetupSched
   return (
     <>
       <DataTable data={days} columns={columns} search="Search date or NAV document" empty={{ title: "No runs yet", hint: "Each day appears here once it has run: use Fetch a day, or switch it on in the Scheduler." }} />
-      {openRow && <RunDetails run={openRow} onClose={() => setOpen(null)} />}
+      {openRow && <RunDetails run={openRow} onClose={() => setOpen(null)} onRetried={onNotice} />}
     </>
   );
 }

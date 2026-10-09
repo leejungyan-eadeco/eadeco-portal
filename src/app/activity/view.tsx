@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { explain } from "@/lib/nav-errors";
-import type { ParkingRun, ParkingSetupRow, Run } from "@/lib/types";
+import type { ParkingRun, Run } from "@/lib/types";
 import { parkingFailure, RunDetails as ParkingRunDetails } from "../automation/parking-reports/run-details";
 import { columnHelper, DataTable, RowActions, type Columns } from "../data-table";
 import { Dialog } from "../dialog";
@@ -24,7 +24,7 @@ type Row = {
   status: Status;
   summary: string;
   note: string | null;
-  retryAt?: Date | null;
+  retryAt?: string | null;
   open: () => void;
 };
 
@@ -93,7 +93,7 @@ function InvoiceRunDetails({ run: r, status, onClose }: { run: Run; status: Stat
   );
 }
 
-export function RunsTable({ runs, parkingRuns, setups, automation }: { runs: Run[]; parkingRuns: ParkingRun[]; setups: ParkingSetupRow[]; automation?: string }) {
+export function RunsTable({ runs, parkingRuns, automation }: { runs: Run[]; parkingRuns: ParkingRun[]; automation?: string }) {
   // What is open, by id: the panel then follows the fresh data as the list refreshes (a run in progress fills in).
   const [viewing, setViewing] = useState<{ invoice: Run; status: Status } | { parkingId: number } | null>(null);
   const router = useRouter();
@@ -117,7 +117,7 @@ export function RunsTable({ runs, parkingRuns, setups, automation }: { runs: Run
             ? { status: "Deleted in NAV" as const, summary: r.note ?? `Draft ${r.navDocument} was deleted in NAV` }
           : r.result === "Created"
             ? { status: "Created" as const, summary: r.navDocument ?? r.note ?? "" }
-            : parkingFailure(r, createdParking.has(`${r.setupId}|${r.reportDate}`), setups.find((x) => x.id === r.setupId));
+            : parkingFailure(r, createdParking.has(`${r.setupId}|${r.reportDate}`));
       return {
         key: `p${r.id}`, automation: "Parking report", at: r.at, triggeredBy: r.triggeredBy, companyName: r.companyName ?? "", subject: r.setupName,
         periodDate: r.reportDate, note: null, ...s, open: () => setViewing({ parkingId: r.id }),
@@ -127,7 +127,7 @@ export function RunsTable({ runs, parkingRuns, setups, automation }: { runs: Run
   }, [runs, parkingRuns]);
 
   // While anything is processing, fetch the list again every few seconds so its steps and result appear.
-  const busy = parkingRuns.some((r) => r.result === "Running");
+  const busy = parkingRuns.some((r) => r.result === "Running" || (r.retryAt && Date.parse(r.retryAt) > Date.now()));
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => router.refresh(), 3000);

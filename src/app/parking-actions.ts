@@ -6,10 +6,10 @@ import { currentUser } from "@/lib/auth";
 import { cronError } from "@/lib/cron";
 import { db } from "@/lib/db";
 import { explain } from "@/lib/nav-errors";
-import { getSetup, runParkingReport, savedPassword, storedSample, testSignIn, verifyRunFiles, type ParkingOutcome } from "@/lib/parking";
+import { getSetup, savedPassword, storedSample, testSignIn, verifyRunFiles } from "@/lib/parking";
 import { todayMY } from "@/lib/schedule";
 import { DBOS } from "@dbos-inc/dbos-sdk";
-import { parkingScheduleName, syncParkingSchedule } from "@/lib/scheduler";
+import { parkingScheduleName, startParkingDay, syncParkingSchedule } from "@/lib/scheduler";
 import { seal } from "@/lib/secret";
 import type { ParkingColumns, ParkingCountOnly, ParkingSample, ParkingSetup } from "@/lib/types";
 import type { Result } from "./actions";
@@ -220,16 +220,27 @@ export async function runParkingNow(setupId: number, date: string): Promise<Resu
   const user = await currentUser();
   if (!user) return fail(EXPIRED);
   if (!isDate(date) || date >= todayMY()) return fail("Pick a day before today: a day's report is complete only once the day is over.");
-  // Resolves "started" as soon as the run is listed in Activity, or with the outcome if it ends before that
-  // (the day already has a draft, it is already being fetched, the setup is gone).
-  const first = await new Promise<"started" | ParkingOutcome | Error>((resolve) => {
-    runParkingReport(setupId, date, `Fetch by ${user.name}`, () => resolve("started"), true).then(resolve, (e) => {
-      console.error("Parking fetch failed", e);
-      resolve(e instanceof Error ? e : new Error(String(e)));
-    });
-  });
+  // The day's workflow (retries included) carries on in the background. Wait a moment: either its run is listed
+  // (started), or it ended at once (the day already has a draft, is already being fetched, the setup is gone).
+  let handle: Awaited<ReturnType<typeof startParkingDay>>;
+  const since = new Date();
+  try {
+    handle = await startParkingDay(setupId, date, `Fetch by ${user.name}`);
+  } catch (e) {
+    return fail(msg(e));
+  }
+  const done = handle.getResult().catch((e: unknown) => new Error(msg(e)));
+  const started = (async () => {
+    for (let i = 0; i < 40; i++) {
+      const { rows } = await db.query(`select 1 from parking_runs where setup_id = $1 and report_date = $2 and ran_at >= $3`, [setupId, date, since]);
+      if (rows[0]) return "started" as const;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return "started" as const;
+  })();
+  const first = await Promise.race([done, started]);
   revalidatePath("/activity");
-  if (first === "started") return { ok: true, data: "Started. It is listed in Activity as Processing, with each step as it happens; it takes about a minute." };
+  if (first === "started") return { ok: true, data: "Started. It is listed in Activity as Processing; if the parking portal or NAV doesn't answer, it tries again after 5, 10 and 15 minutes." };
   if (first instanceof Error) return fail(first.message);
   if (first.existing && first.posted) return { ok: true, data: `This day's draft ${first.navDocument} has been posted in NAV as ${first.posted}. Nothing new was created.` };
   if (first.existing) return { ok: true, data: first.navDocument ? `This day already has a draft in NAV: ${first.navDocument}. Nothing new was created.` : "This day had no paid transactions, so it needs no draft." };

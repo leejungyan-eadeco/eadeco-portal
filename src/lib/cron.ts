@@ -24,21 +24,6 @@ export function nextRuns(expr: string, count = 3, from = new Date()): Date[] {
   return Array.from({ length: count }, () => it.next().toDate());
 }
 
-// When the schedule will next try a parking report day that has no draft: the first upcoming run whose window
-// (yesterday, back to the make-up days, never before the first report date) includes the day. Windows only move
-// forward, so if that run doesn't cover it, none will: null means it is not tried again automatically.
-export function nextParkingRetry(reportDate: string, s: { status: string; schedule: string; catchUpDays: number; startDate: string }, from = new Date()): Date | null {
-  if (s.status !== "Active") return null;
-  const minus = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) - n * 864e5).toISOString().slice(0, 10);
-  for (const at of nextRuns(s.schedule, 400, from)) {
-    const yesterday = minus(at.toLocaleDateString("en-CA", { timeZone: TIMEZONE }), 1);
-    if (yesterday < reportDate) continue; // the day isn't over yet at this run
-    const from = [minus(yesterday, s.catchUpDays), s.startDate].sort()[1];
-    return reportDate >= from ? at : null;
-  }
-  return null;
-}
-
 // The "When" choices on the Scheduler page. Each is just a cron underneath, so DBOS only ever sees cron.
 export type When =
   | { mode: "interval"; every: number; unit: "minutes" | "hours" }

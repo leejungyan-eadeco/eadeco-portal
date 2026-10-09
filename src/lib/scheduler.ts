@@ -4,7 +4,8 @@
 import { DBOS } from "@dbos-inc/dbos-sdk";
 import { dbosCron, TIMEZONE } from "./cron";
 import { db } from "./db";
-import { getSetup, missingParkingDates, runParkingReport } from "./parking";
+import { explain } from "./nav-errors";
+import { getSetup, markRetry, missingParkingDates, runParkingReport, type ParkingOutcome } from "./parking";
 import { runInvoice } from "./runs";
 import { nextRun } from "./schedule";
 
@@ -104,8 +105,27 @@ async function recurringInvoices(scheduledFor: Date): Promise<void> {
 
 export const parkingScheduleName = (setupId: number) => `parking:${setupId}`;
 
-// One run: yesterday's report, plus any make-up days before it that have no draft yet (never before the
-// setup's first report date). A failed day is simply tried again on the next run.
+// One day, with retries: a temporary failure (parking portal not loading, NAV unreachable or busy) is tried again
+// 5, 10 and 15 minutes later, then left as Failed. Anything else (setup, mapping, NAV refusing the data) stops at once.
+// A DBOS workflow, so a waiting retry survives a restart. recheck: see runParkingReport (Fetch a day only).
+const RETRY_MINUTES = [5, 10, 15];
+type DayResult = Omit<ParkingOutcome, "runId">;
+async function parkingDay(setupId: number, date: string, trigger: string, recheck: boolean): Promise<DayResult> {
+  for (let attempt = 0; ; attempt++) {
+    const o = await DBOS.runStep(
+      () => runParkingReport(setupId, date, trigger, undefined, recheck && attempt === 0).catch((e): ParkingOutcome => ({ result: "Failed", navDocument: null, error: e instanceof Error ? e.message : String(e), errorCode: null, existing: false })),
+      { name: `attempt-${attempt + 1}` },
+    );
+    const wait = RETRY_MINUTES[attempt];
+    const { runId, ...result } = o;
+    if (o.result === "Created" || !runId || wait === undefined || !explain(o.error ?? "", o.errorCode).retry) return result;
+    await DBOS.runStep(() => markRetry(runId, wait), { name: `retry-${attempt + 1}` });
+    await DBOS.sleep(wait * 60_000);
+  }
+}
+
+// One scheduled run: yesterday's report, plus any make-up days before it that have no draft yet (never before the
+// setup's first report date).
 async function parkingSetupRun(scheduledFor: Date, context: { setupId: number }): Promise<void> {
   const yesterday = minusDays(myDate(scheduledFor), 1);
   const s = await DBOS.runStep(() => getSetup(context.setupId), { name: "setup" });
@@ -114,26 +134,21 @@ async function parkingSetupRun(scheduledFor: Date, context: { setupId: number })
   const dates = from > yesterday ? [] : await DBOS.runStep(() => missingParkingDates(s.id, from, yesterday), { name: "find-missing" });
   const total = { created: 0, failed: 0 };
   for (const date of dates) {
-    // A parking portal blip (page not loading, timeout) is tried again within this run: up to 3 attempts, a minute
-    // apart, before the day is left for the next run. Each attempt is its own run in Activity.
-    const r = await DBOS.runStep(
-      async () => {
-        for (let attempt = 1; ; attempt++) {
-          const o = await runParkingReport(s.id, date, "Scheduler").catch(() => null);
-          if (o?.result === "Created" || attempt >= 3 || o?.errorCode !== "PARKING_PORTAL") return o?.result ?? "Failed";
-          await new Promise((wait) => setTimeout(wait, 60_000));
-        }
-      },
-      { name: `report-${date}` },
-    );
-    total[r === "Created" ? "created" : "failed"]++;
+    const r = await g.__parkingDay!(s.id, date, "Scheduler", false); // child workflow, retries included
+    total[r.result === "Created" ? "created" : "failed"]++;
   }
   DBOS.logger.info(`Parking report "${s.name}" up to ${yesterday}: ${total.created} created, ${total.failed} failed (${dates.length} missing).`);
 }
 
+// Fetch a day: starts the day's workflow and returns its handle (the run carries on in the background).
+export async function startParkingDay(setupId: number, date: string, trigger: string) {
+  if (!g.__parkingDay) throw new Error("The scheduler is not running, so the day can't be fetched now. Restart the portal.");
+  return DBOS.startWorkflow(g.__parkingDay)(setupId, date, trigger, true);
+}
+
 // The registered workflow is kept on globalThis: server actions run in another module copy than the startup hook,
 // and DBOS only knows the copy that was registered.
-const g = globalThis as unknown as { __dbosStarted?: boolean; __parkingWorkflow?: typeof parkingSetupRun };
+const g = globalThis as unknown as { __dbosStarted?: boolean; __parkingWorkflow?: typeof parkingSetupRun; __parkingDay?: typeof parkingDay };
 
 // Creates, changes, pauses or removes a setup's live schedule to match the database. Called after every save.
 export async function syncParkingSchedule(setupId: number) {
@@ -162,6 +177,7 @@ export async function startScheduler() {
 
   DBOS.setConfig({ name: "eadepro-portal", systemDatabaseUrl: process.env.DATABASE_URL });
   const registered = Object.fromEntries(jobs.map((j) => [j.key, DBOS.registerWorkflow(workflows[j.key], { name: `job-${j.key}` })]));
+  g.__parkingDay = DBOS.registerWorkflow(parkingDay, { name: "parking-day" });
   g.__parkingWorkflow = DBOS.registerWorkflow(parkingSetupRun, { name: "parking-setup" });
   await DBOS.launch();
 

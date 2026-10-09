@@ -75,7 +75,7 @@ export function ParkingView({ setups, runs, companies, admin }: { setups: Parkin
       {notice && <p className="mb-4 rounded-lg bg-good-soft px-3.5 py-3 text-sm text-good">{notice}</p>}
 
       <section className={panel}>
-        <DaysTab runs={runs.filter((r) => r.setupId === s.id)} setup={s} />
+        <DaysTab runs={runs.filter((r) => r.setupId === s.id)} onNotice={setNotice} />
       </section>
 
       {editing && (

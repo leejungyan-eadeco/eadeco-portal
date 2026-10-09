@@ -116,6 +116,7 @@ export type ParkingRun = {
   triggeredBy: string;
   settings: Omit<ParkingSetup, "hasPassword"> | null;
   steps: ParkingStep[];
+  retryAt: string | null; // ISO: when the next automatic attempt starts
 };
 
 // A day's report summed by payment type (RM), for picking columns and previewing the lines before saving.

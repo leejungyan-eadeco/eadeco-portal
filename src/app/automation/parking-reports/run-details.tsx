@@ -1,34 +1,41 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, CircleNotch, DownloadSimple, ShieldCheck, ShieldWarning, XCircle } from "@phosphor-icons/react";
-import { nextParkingRetry } from "@/lib/cron";
+import { ArrowClockwise, CheckCircle, CircleNotch, DownloadSimple, ShieldCheck, ShieldWarning, XCircle } from "@phosphor-icons/react";
 import { explain } from "@/lib/nav-errors";
 import { myTime } from "../../schedule-editor";
 import type { ParkingRun } from "@/lib/types";
 import { Dialog } from "../../dialog";
-import { verifyParkingRun } from "../../parking-actions";
+import { runParkingNow, verifyParkingRun } from "../../parking-actions";
 import { Badge, btn, fmtDate, fmtDateTime, num, rm, StatusBadge, td, th } from "../../ui";
 
-export type RunRow = ParkingRun & { status: "Processing" | "Created" | "Deleted in NAV" | "Failed" | "Will retry" | "Resolved"; summary: string; net: number; retryAt?: Date | null };
-
-type SetupSchedule = { status: string; schedule: string; catchUpDays: number; startDate: string };
-
-// Status of a failed parking run. A temporary problem shows "Will retry" only when the schedule will actually try the
-// day again, with when; otherwise it is Failed and someone has to use Fetch a day.
-export function parkingFailure(r: ParkingRun, laterCreated: boolean, setup: SetupSchedule | undefined): Pick<RunRow, "status" | "summary" | "retryAt"> {
-  const x = explain(r.error ?? "", r.errorCode);
-  if (laterCreated) return { status: "Resolved", summary: x.summary, retryAt: null };
-  if (!x.retry) return { status: "Failed", summary: x.summary, retryAt: null };
-  const at = setup ? nextParkingRetry(r.reportDate, setup) : null;
-  return at ? { status: "Will retry", summary: `${x.summary}. Tries again ${myTime(at)}`, retryAt: at } : { status: "Failed", summary: `${x.summary}. Not tried again automatically: use Fetch a day`, retryAt: null };
-}
+export type RunRow = ParkingRun & { status: "Processing" | "Created" | "Deleted in NAV" | "Failed" | "Will retry" | "Resolved"; summary: string; net: number };
 
 export const fileUrl = (folder: string, name: string) => `/automation/parking-reports/files/${folder}/${encodeURIComponent(name)}`;
 
 const proof = { ok: "Fingerprint matches", changed: "Changed since the run: this file is not the original", removed: "Removed after 30 days" } as const;
 
-export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => void }) {
+// Status of a failed parking run: "Will retry" while its next automatic attempt is pending (5, 10, 15 minutes after a
+// temporary failure), otherwise Failed.
+export function parkingFailure(r: ParkingRun, laterCreated: boolean): Pick<RunRow, "status" | "summary" | "retryAt"> {
+  const x = explain(r.error ?? "", r.errorCode);
+  if (laterCreated) return { status: "Resolved", summary: x.summary, retryAt: null };
+  if (r.retryAt && Date.parse(r.retryAt) > Date.now()) return { status: "Will retry", summary: `${x.summary}. Tries again ${myTime(r.retryAt)}`, retryAt: r.retryAt };
+  return { status: "Failed", summary: x.summary, retryAt: null };
+}
+
+export function RunDetails({ run: r, onClose, onRetried }: { run: RunRow; onClose: () => void; onRetried?: (message: string) => void }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState("");
+  const retry = async () => {
+    setRetrying(true);
+    setRetryError("");
+    const res = await runParkingNow(r.setupId, r.reportDate);
+    setRetrying(false);
+    if (!res.ok) return setRetryError(res.error);
+    onRetried?.(res.data);
+    onClose();
+  };
   const x = r.error ? explain(r.error, r.errorCode) : null;
   const processing = r.status === "Processing";
   const [checked, setChecked] = useState<Record<number, keyof typeof proof> | null>(null);
@@ -55,6 +62,15 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
           {item("NAV draft", r.navDocument ? <span className="tabular-nums">{r.navDocument}</span> : <span className="text-ink-3">None</span>)}
           {item("Started by", `${r.triggeredBy}, ${fmtDateTime(r.at)}`)}
         </dl>
+
+        {(r.status === "Failed" || r.status === "Will retry") && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button className={`${btn.primary} disabled:pointer-events-none disabled:opacity-50`} disabled={retrying} onClick={retry}>
+              <ArrowClockwise size={16} className={retrying ? "animate-spin" : ""} /> {retrying ? "Starting" : "Retry now"}
+            </button>
+            {retryError && <span className="text-sm text-bad">{retryError}</span>}
+          </div>
+        )}
 
         {processing && (
           <p className="flex items-center gap-2 rounded-lg bg-info-soft px-3.5 py-3 text-info">
@@ -89,9 +105,9 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
                   <p className="text-xs font-medium text-ink-3">What to do</p>
                   <p className="text-ink">
                     {r.retryAt
-                      ? `Nothing to do. The schedule tries this day again ${myTime(r.retryAt)}.`
+                      ? `Nothing to do. It tries again ${myTime(r.retryAt)}; after a temporary failure the portal tries 5, 10 and 15 minutes later.`
                       : x.retry && r.status === "Failed"
-                        ? "The schedule won't try this day again (it is switched off, or the day is older than its make-up days). Use Fetch a day on the Parking Reports page."
+                        ? "It was tried again 5, 10 and 15 minutes later without success. Use Retry when the parking portal or NAV is back; tell IT if it keeps failing."
                         : x.action}
                   </p>
                 </div>
@@ -193,7 +209,16 @@ export function RunDetails({ run: r, onClose }: { run: RunRow; onClose: () => vo
                 </li>
               );
             })}
-            {processing && (
+            {(r.status === "Failed" || r.status === "Will retry") && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button className={`${btn.primary} disabled:pointer-events-none disabled:opacity-50`} disabled={retrying} onClick={retry}>
+              <ArrowClockwise size={16} className={retrying ? "animate-spin" : ""} /> {retrying ? "Starting" : "Retry now"}
+            </button>
+            {retryError && <span className="text-sm text-bad">{retryError}</span>}
+          </div>
+        )}
+
+        {processing && (
               <li className="grid grid-cols-[4.5rem_1.5rem_minmax(0,1fr)] gap-x-3">
                 <span />
                 <span className="flex justify-center text-info">

@@ -57,7 +57,7 @@ export async function listParkingRuns(limit = 400): Promise<ParkingRun[]> {
     `select r.id, r.setup_id as "setupId", coalesce(s.name, r.settings->>'name') as "setupName",
             to_char(r.ran_at at time zone 'Asia/Kuala_Lumpur', 'YYYY-MM-DD"T"HH24:MI') as at, to_char(r.report_date, 'YYYY-MM-DD') as "reportDate",
             r.result, r.nav_document_no as "navDocument", r.error, r.error_code as "errorCode", r.note, r.folder, r.totals,
-            r.row_count as "rowCount", r.triggered_by as "triggeredBy", r.settings, c.name as "companyName",
+            r.row_count as "rowCount", r.triggered_by as "triggeredBy", r.settings, c.name as "companyName", r.retry_at as "retryAt",
             coalesce((select json_agg(json_build_object('seq', x.seq, 'at', to_char(x.at at time zone 'Asia/Kuala_Lumpur', 'HH24:MI:SS'), 'step', x.step,
                         'detail', x.detail, 'ok', x.ok, 'file', x.file, 'sha256', x.sha256) order by x.seq)
                       from parking_run_steps x where x.run_id = r.id), '[]') as steps
